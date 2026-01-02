@@ -18,6 +18,7 @@ ARG GODOT_RELEASE_TYPE
 ARG GODOT_SHA256
 
 # Install build tools
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -46,6 +47,7 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/claude-godot-
 # - ca-certificates: for HTTPS
 # - nodejs + npm: required for Claude Code CLI (npm package)
 # Note: Node.js is required because Claude Code is distributed as npm package
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     git \
