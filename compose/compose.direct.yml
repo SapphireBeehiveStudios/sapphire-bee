@@ -19,9 +19,9 @@ services:
     stdin_open: true
     tty: true
     
-    # Environment - API key from .env file
+    # Environment - API key from .env file (not needed for CI validation)
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - HOME=/home/claude
       - USER=claude
     
@@ -45,7 +45,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 256
     
     # Resource limits (can override via environment)
     deploy:
@@ -53,6 +52,7 @@ services:
         limits:
           memory: ${AGENT_MEMORY_LIMIT:-2G}
           cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
         reservations:
           memory: 256M
     

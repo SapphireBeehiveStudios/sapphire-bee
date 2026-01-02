@@ -40,7 +40,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 256
     
     # Resource limits
     deploy:
@@ -48,6 +47,7 @@ services:
         limits:
           memory: ${AGENT_MEMORY_LIMIT:-2G}
           cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
         reservations:
           memory: 256M
     
