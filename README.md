@@ -668,8 +668,8 @@ godot-agent/
 
 ## License
 
-[Your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-[Your contributing guidelines here]
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
