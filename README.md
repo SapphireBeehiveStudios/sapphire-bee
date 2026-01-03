@@ -188,6 +188,37 @@ This shows which authentication method is configured and ready to use.
 
 **Note**: If both are set, `ANTHROPIC_API_KEY` takes priority over `CLAUDE_CODE_OAUTH_TOKEN`.
 
+### Option 3: GitHub Personal Access Token (Optional)
+
+To enable Claude to clone, commit, and push to GitHub repositories, add a GitHub Personal Access Token:
+
+```bash
+# Create a GitHub PAT with 'repo' scope (or 'public_repo' for public repos only)
+# https://github.com/settings/tokens
+
+# Add to .env file
+echo 'GITHUB_PAT=ghp_...' >> .env
+```
+
+**Security Notes:**
+- PAT grants full access to repositories you have access to
+- Use minimal required scopes (`repo` for private repos, `public_repo` for public only)
+- PAT is stored in `.env` (already gitignored)
+- PAT is automatically configured for git operations when the container starts
+
+**Usage:**
+```bash
+# Inside the container, git is automatically configured if GITHUB_PAT is set
+# Clone a repository:
+/opt/scripts/clone-repo.sh owner/repo
+
+# Or use git directly:
+git clone https://github.com/owner/repo.git
+git add .
+git commit -m "Changes made by Claude"
+git push
+```
+
 ### Using Make vs Scripts
 
 The Makefile is for **you (the human)** to run on your Mac — it manages the sandbox from outside. Claude runs inside the container and doesn't use the Makefile.

@@ -58,6 +58,12 @@ setup_claude_config() {
 # Run setup
 setup_claude_config
 
+# Optionally configure git with GitHub PAT if available
+if [[ -n "${GITHUB_PAT:-}" ]] && [[ -f /opt/scripts/setup-git-pat.sh ]]; then
+    # shellcheck source=/dev/null
+    source /opt/scripts/setup-git-pat.sh || true
+fi
+
 # Execute the provided command or default to bash
 exec "$@"
 

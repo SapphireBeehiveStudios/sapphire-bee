@@ -68,6 +68,56 @@ make build
 make up
 ```
 
+### Skill: Using GitHub Personal Access Token
+
+To enable Claude to clone, commit, and push to GitHub repositories:
+
+```bash
+# 1. Create a GitHub PAT with appropriate scopes
+# Visit: https://github.com/settings/tokens
+# Required scopes:
+#   - 'repo' (full access) for private repositories
+#   - 'public_repo' (read/write access) for public repositories only
+
+# 2. Add PAT to .env file
+echo 'GITHUB_PAT=ghp_...' >> .env
+
+# 3. Git is automatically configured when container starts (if GITHUB_PAT is set)
+```
+
+**Inside the container, git operations work automatically:**
+
+```bash
+# Clone a repository using the helper script
+/opt/scripts/clone-repo.sh owner/repo
+# Or specify target directory:
+/opt/scripts/clone-repo.sh owner/repo /project/my-repo
+
+# Or use git directly (PAT is already configured)
+git clone https://github.com/owner/repo.git
+cd repo
+# ... make changes ...
+git add .
+git commit -m "Changes made by Claude"
+git push
+```
+
+**Security Notes:**
+- PAT grants full repository access - use minimal required scopes
+- PAT is stored in `.env` (gitignored, not committed)
+- Git credentials are stored in tmpfs (temporary, cleared on container stop)
+- PAT is not exposed in process lists or URLs (uses credential helper)
+
+**Manual git configuration (if needed):**
+```bash
+# Source the setup script manually
+source /opt/scripts/setup-git-pat.sh
+
+# Or configure git user info
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
 ### Skill: Running Claude in the Sandbox (Persistent Mode - Recommended)
 
 Persistent mode keeps the agent running for quick iterations:

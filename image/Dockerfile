@@ -87,7 +87,9 @@ COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
 # Copy entrypoint script and set permissions in one layer
 # Scripts change more frequently, so they're copied later
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY scripts/setup-git-pat.sh /opt/scripts/setup-git-pat.sh
+COPY scripts/clone-repo.sh /opt/scripts/clone-repo.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /opt/scripts/setup-git-pat.sh /opt/scripts/clone-repo.sh
 
 # Copy config files last (they change most frequently)
 # This minimizes cache invalidation when only config changes

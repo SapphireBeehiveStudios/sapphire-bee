@@ -37,6 +37,7 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - GITHUB_PAT=${GITHUB_PAT:-}
       - HOME=/home/claude
       - USER=claude
       - PROJECT_DIR=/project
