@@ -31,6 +31,30 @@ godot-agent/
 └── logs/                    # Session logs (gitignored)
 ```
 
+## Pre-built Image
+
+The agent image is automatically built and pushed to GitHub Container Registry:
+```
+ghcr.io/sapphirebeehive/claude-godot-agent
+```
+
+### Available Tags
+
+| Tag | Example | Description |
+|-----|---------|-------------|
+| `latest` | `:latest` | Most recent build from main branch |
+| `godot-X.Y` | `:godot-4.3` | Tagged by Godot version |
+| `YYYYMMDD` | `:20250102` | Tagged by build date |
+| `sha-XXXXXX` | `:sha-a1b2c3d` | Tagged by git commit SHA |
+
+### Architectures
+
+Multi-arch manifest with both platforms (pulls correct one automatically):
+- `linux/amd64` - Intel/AMD (x86_64)
+- `linux/arm64` - Apple Silicon, ARM servers
+
+Build workflow: `.github/workflows/build-and-push.yml`
+
 ## Key Commands
 
 All commands are run on the **host machine**, not inside containers:
