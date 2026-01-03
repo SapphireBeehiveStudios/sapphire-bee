@@ -39,6 +39,13 @@ Use conventional commit types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `r
 - Use `# shellcheck disable=SC2034` for intentionally unused variables (like color constants)
 - Color variables are often defined as a complete set for consistency
 
+### Python
+- **Always use `uv` instead of `pip`** for Python package management
+- Use `uv pip install` instead of `pip install`
+- Use `uv venv` instead of `python -m venv`
+- Use `uv run` to run Python scripts with dependencies
+- Never use bare `pip` commands
+
 ### Documentation
 - When adding new steps to numbered guides, update all subsequent step numbers
 - Update related checklists when adding new required steps

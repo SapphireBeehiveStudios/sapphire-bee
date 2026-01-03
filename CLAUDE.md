@@ -725,6 +725,13 @@ Types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
 - Use `shellcheck` for linting
 - Add `# shellcheck disable=SCXXXX` comments with explanation when needed
 
+### Python
+- **Always use `uv` instead of `pip`** for Python package management
+- Use `uv pip install` instead of `pip install`
+- Use `uv venv` instead of `python -m venv`
+- Use `uv run` to run Python scripts with dependencies
+- Never use bare `pip` commands
+
 ## Files to Never Commit
 
 - `.env` (contains secrets)
