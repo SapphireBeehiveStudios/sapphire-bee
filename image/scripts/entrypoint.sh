@@ -58,10 +58,21 @@ setup_claude_config() {
 # Run setup
 setup_claude_config
 
-# Optionally configure git with GitHub PAT if available
-if [[ -n "${GITHUB_PAT:-}" ]] && [[ -f /opt/scripts/setup-git-pat.sh ]]; then
-    # shellcheck source=/dev/null
-    source /opt/scripts/setup-git-pat.sh || true
+# Optionally configure git and gh with GitHub PAT if available
+if [[ -n "${GITHUB_PAT:-}" ]]; then
+    # Configure git credentials
+    if [[ -f /opt/scripts/setup-git-pat.sh ]]; then
+        # shellcheck source=/dev/null
+        source /opt/scripts/setup-git-pat.sh || true
+    fi
+    
+    # Configure GitHub CLI (gh) - it uses GH_TOKEN env var for auth
+    export GH_TOKEN="${GITHUB_PAT}"
+    
+    # Set default git protocol to https (required for PAT auth)
+    if command -v gh >/dev/null 2>&1; then
+        gh config set git_protocol https --host github.com 2>/dev/null || true
+    fi
 fi
 
 # Execute the provided command or default to bash

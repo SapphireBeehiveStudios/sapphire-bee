@@ -85,7 +85,7 @@ echo 'GITHUB_PAT=ghp_...' >> .env
 # 3. Git is automatically configured when container starts (if GITHUB_PAT is set)
 ```
 
-**Inside the container, git operations work automatically:**
+**Inside the container, git and gh CLI work automatically:**
 
 ```bash
 # Clone a repository using the helper script
@@ -100,6 +100,15 @@ cd repo
 git add .
 git commit -m "Changes made by Claude"
 git push
+
+# GitHub CLI (gh) for full repo management:
+gh issue list                                   # List issues
+gh issue create --title "Bug" --body "Details"  # Create issue
+gh issue close 123                              # Close issue
+gh pr create --title "Fix" --body "Details"     # Create PR
+gh pr list                                      # List PRs
+gh pr merge 123                                 # Merge PR
+gh release create v1.0.0                        # Create release
 ```
 
 **Security Notes:**

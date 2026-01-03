@@ -208,7 +208,8 @@ echo 'GITHUB_PAT=ghp_...' >> .env
 
 **Usage:**
 ```bash
-# Inside the container, git is automatically configured if GITHUB_PAT is set
+# Inside the container, git and gh are automatically configured if GITHUB_PAT is set
+
 # Clone a repository:
 /opt/scripts/clone-repo.sh owner/repo
 
@@ -217,6 +218,13 @@ git clone https://github.com/owner/repo.git
 git add .
 git commit -m "Changes made by Claude"
 git push
+
+# GitHub CLI (gh) is also available for repo management:
+gh issue list
+gh issue create --title "Bug" --body "Description"
+gh pr create --title "Fix bug" --body "Description"
+gh pr list
+gh pr merge 123
 ```
 
 ### Using Make vs Scripts
