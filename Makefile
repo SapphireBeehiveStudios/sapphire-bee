@@ -92,7 +92,8 @@ github-pat: ## Create GitHub PAT for a repository (usage: make github-pat REPO=o
 
 github-app-test: _check-tests ## Test GitHub App credentials and token generation
 	@echo "Testing GitHub App credentials..."
-	@$(VENV_PYTHON) -m github_app.test_github_app $(if $(REPOS),--repositories $(REPOS))
+	@if [ -f ".env" ]; then set -a; . ./.env; set +a; fi; \
+	$(VENV_PYTHON) -m github_app.test_github_app $(if $(REPOS),--repositories $(REPOS))
 
 github-app-validate: _check-tests ## Validate GitHub App setup (quick check)
 	@echo "Validating GitHub App configuration..."
