@@ -1,0 +1,82 @@
+# compose.persistent.yml - Agent container that stays running
+# Use with: docker compose -f compose.base.yml -f compose.persistent.yml up -d
+#
+# This mode keeps the agent container running, allowing you to:
+# - Attach/detach with docker exec for quick Claude interactions
+# - Maintain Claude conversation context across multiple commands
+# - Run single prompts without interactive shell
+#
+# See also: compose.direct.yml for ephemeral (one-shot) sessions
+
+services:
+  agent:
+    build:
+      context: ../image
+      dockerfile: Dockerfile
+      args:
+        - GODOT_VERSION=${GODOT_VERSION:-4.6}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta2}
+    image: claude-godot-agent:latest
+    container_name: agent
+    stdin_open: true
+    tty: true
+    
+    # Keep container running - attach with docker exec
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+    
+    # Environment - authentication via API key OR Claude Max OAuth token
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - HOME=/home/claude
+      - USER=claude
+    
+    # Network: sandbox only, use dnsfilter for DNS
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.100
+    dns:
+      - 10.100.1.2  # dnsfilter
+    
+    # Direct mount: host project directory -> /project (RW)
+    volumes:
+      - ${PROJECT_PATH:-./../project}:/project:rw
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/claude:size=50M,mode=0755,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits (can override via environment)
+    deploy:
+      resources:
+        limits:
+          memory: ${AGENT_MEMORY_LIMIT:-2G}
+          cpus: "${AGENT_CPU_LIMIT:-2.0}"
+          pids: 256
+        reservations:
+          memory: 256M
+    
+    # Depends on infrastructure services
+    depends_on:
+      dnsfilter:
+        condition: service_started
+      proxy_github:
+        condition: service_started
+      proxy_anthropic_api:
+        condition: service_started
+    
+    # Working directory
+    working_dir: /project
+
+networks:
+  sandbox_net:
+    external: true
+    name: claude-godot-sandbox_sandbox_net
+

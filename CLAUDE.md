@@ -66,9 +66,31 @@ make build
 make up
 ```
 
-### Skill: Running Claude in the Sandbox
+### Skill: Running Claude in the Sandbox (Persistent Mode - Recommended)
 
-To run Claude Code inside the sandbox with a Godot project:
+Persistent mode keeps the agent running for quick iterations:
+
+```bash
+# Start persistent agent (infrastructure + agent container)
+make up-agent PROJECT=/path/to/godot/project
+
+# Run Claude commands instantly (no startup delay)
+make claude                          # Interactive session
+make claude P="your prompt here"     # Single prompt
+
+# Check agent status
+make agent-status
+
+# Open bash shell in agent
+make claude-shell
+
+# Stop agent when done
+make down-agent
+```
+
+### Skill: Running Claude in the Sandbox (One-shot Mode)
+
+For ephemeral sessions that don't persist context:
 
 ```bash
 # Direct mode - Claude can modify files immediately
@@ -81,9 +103,32 @@ make run-staging STAGING=/path/to/staging
 make run-offline PROJECT=/path/to/godot/project
 ```
 
-### Skill: Daily Workflow
+### Skill: Daily Workflow (Persistent Mode)
 
-Typical daily operations:
+Recommended daily workflow using persistent agent:
+
+```bash
+# Start your day - bring up persistent agent
+make up-agent PROJECT=~/my-game
+
+# Throughout the day, quick Claude interactions
+make claude P="What's the structure of this project?"
+make claude P="Add player movement to player.gd"
+make claude P="Fix the bug in collision.gd"
+
+# For longer conversations
+make claude
+
+# Check agent is still running
+make agent-status
+
+# End of day - shut down
+make down-agent
+```
+
+### Skill: Daily Workflow (One-shot Mode)
+
+Alternative workflow using ephemeral sessions:
 
 ```bash
 # Start your day - bring up services
@@ -316,7 +361,8 @@ To allow the sandbox to access a new domain:
 godot-agent/
 ├── compose/                 # Docker Compose configurations
 │   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
-│   ├── compose.direct.yml   # Agent with direct project mount
+│   ├── compose.direct.yml   # Agent with direct project mount (one-shot)
+│   ├── compose.persistent.yml # Agent that stays running (recommended)
 │   ├── compose.staging.yml  # Agent with staging directory mount
 │   └── compose.offline.yml  # Agent with no network access
 ├── configs/
@@ -349,6 +395,14 @@ godot-agent/
 | `make up` | Start infrastructure (DNS + proxies) |
 | `make down` | Stop all services |
 | `make status` | Show service status |
+| **Persistent Mode (Recommended)** | |
+| `make up-agent PROJECT=...` | Start persistent agent container |
+| `make claude` | Interactive Claude session |
+| `make claude P="..."` | Single prompt execution |
+| `make agent-status` | Check if agent is running |
+| `make claude-shell` | Open bash shell in agent |
+| `make down-agent` | Stop persistent agent |
+| **One-shot Mode** | |
 | `make run-direct PROJECT=...` | Run Claude in direct mode |
 | `make run-staging STAGING=...` | Run Claude in staging mode |
 | `make scan PROJECT=...` | Scan for dangerous patterns |
@@ -368,6 +422,8 @@ godot-agent/
 | `make u` | `make up` |
 | `make s` | `make status` |
 | `make l` | `make logs` |
+| `make c` | `make claude` |
+| `make a` | `make agent-status` |
 
 ## Authentication
 

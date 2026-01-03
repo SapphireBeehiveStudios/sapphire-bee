@@ -73,6 +73,24 @@ fi
 MODE="$1"
 PROJECT_PATH="$2"
 
+# Check if agent container is already running
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^agent$'; then
+    log_warn "Agent container is already running!"
+    echo ""
+    echo "You can:"
+    echo "  1. Attach to it:  make claude"
+    echo "  2. Stop it first: make down-agent"
+    echo ""
+    read -p "Attach to running container? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        log_info "Exiting. Stop the container with: make down-agent"
+        exit 0
+    fi
+    # Attach to running container
+    exec "${SCRIPT_DIR}/claude-exec.sh"
+fi
+
 # Validate mode
 case "$MODE" in
     direct|staging|offline)

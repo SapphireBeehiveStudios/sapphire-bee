@@ -130,11 +130,24 @@ make doctor
 # 4. Build the agent image
 make build
 
-# 5. Start infrastructure
-make up
+# 5. Start persistent agent (recommended)
+make up-agent PROJECT=/path/to/your/godot/project
 
-# 6. Run Claude with your project
-make run-direct PROJECT=/path/to/your/godot/project
+# 6. Run Claude commands
+make claude                        # Interactive session
+make claude P="your prompt here"   # Single prompt
+
+# 7. When done
+make down-agent
+```
+
+### Quick Start (One-shot Mode)
+
+For ephemeral sessions that don't persist:
+
+```bash
+make up                                           # Start infrastructure
+make run-direct PROJECT=/path/to/your/godot/project  # One-shot session
 ```
 
 ## Authentication
@@ -210,6 +223,10 @@ You can use either `make` targets or scripts directly:
 | `make doctor` | `./scripts/doctor.sh` |
 | `make build` | `./scripts/build.sh` |
 | `make up` | `./scripts/up.sh` |
+| `make up-agent PROJECT=...` | Start persistent agent container |
+| `make claude` | Interactive Claude session |
+| `make claude P="..."` | Single prompt execution |
+| `make down-agent` | Stop persistent agent |
 | `make run-direct PROJECT=...` | `./scripts/run-claude.sh direct ...` |
 | `make logs` | `docker compose logs -f` |
 | `make ci` | Run CI workflow locally with `act` |
@@ -233,7 +250,43 @@ make ci-build       # Build test
 make ci-dry-run     # Preview without running
 ```
 
-## Running Modes
+## Persistent Mode (Recommended)
+
+Persistent mode keeps the agent container running, allowing you to:
+- **Instant Claude access** - No container startup delay
+- **Context persistence** - Claude remembers previous interactions within a session
+- **Quick prompts** - Run single commands without entering interactive mode
+
+```bash
+# Start your work session
+make up-agent PROJECT=~/my-godot-game
+
+# Throughout the day, run Claude commands instantly
+make claude P="What files are in this project?"
+make claude P="Add a jump mechanic to player.gd"
+make claude P="Fix the collision detection bug"
+
+# For longer conversations, use interactive mode
+make claude
+
+# Open a shell for manual exploration
+make claude-shell
+
+# Check agent status
+make agent-status
+
+# End of day - stop the agent
+make down-agent
+```
+
+**Benefits over one-shot mode:**
+- No 3-5 second container startup for each interaction
+- Claude maintains conversation context across commands
+- Multiple terminal windows can attach to the same session
+
+## Running Modes (One-shot)
+
+The following modes start a new container for each session. Use these when you don't need persistence or want maximum isolation.
 
 ### Direct Mode (Fast)
 

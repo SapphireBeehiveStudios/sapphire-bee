@@ -7,7 +7,8 @@
         run-godot promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
-        test-security test-dns test-network test-hardening test-filesystem test-offline
+        test-security test-dns test-network test-hardening test-filesystem test-offline \
+        up-agent down-agent claude claude-shell agent-status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -40,11 +41,15 @@ help: ## Show this help message
 	@echo "$(CYAN)Claude-Godot Sandbox$(RESET)"
 	@echo "====================="
 	@echo ""
-	@echo "$(GREEN)Quick Start:$(RESET)"
-	@echo "  make auth          # Check authentication status"
-	@echo "  make doctor        # Check your environment"
-	@echo "  make build         # Build the agent image"
-	@echo "  make up            # Start infrastructure services"
+	@echo "$(GREEN)Quick Start (Persistent Mode - Recommended):$(RESET)"
+	@echo "  make doctor                    # Check your environment"
+	@echo "  make build                     # Build the agent image"
+	@echo "  make up-agent PROJECT=~/game   # Start persistent agent"
+	@echo "  make claude                    # Interactive Claude session"
+	@echo "  make claude P=\"your prompt\"    # Single prompt"
+	@echo "  make down-agent                # Stop when done"
+	@echo ""
+	@echo "$(GREEN)Quick Start (One-shot Mode):$(RESET)"
 	@echo "  make run-direct PROJECT=/path/to/project"
 	@echo ""
 	@echo "$(GREEN)Available Targets:$(RESET)"
@@ -52,10 +57,11 @@ help: ## Show this help message
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-18s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Examples:$(RESET)"
+	@echo "  make up-agent PROJECT=~/my-godot-game"
+	@echo "  make claude P=\"Add player movement\""
 	@echo "  make run-direct PROJECT=~/my-godot-game"
 	@echo "  make run-staging STAGING=~/staging LIVE=~/my-godot-game"
 	@echo "  make run-godot PROJECT=~/my-godot-game ARGS='--version'"
-	@echo "  make promote STAGING=~/staging LIVE=~/my-godot-game"
 	@echo ""
 
 #==============================================================================
@@ -91,6 +97,8 @@ validate: ## Validate compose configuration
 		echo "✓ compose.direct.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.staging.yml config --quiet && \
 		echo "✓ compose.staging.yml is valid"
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.persistent.yml config --quiet && \
+		echo "✓ compose.persistent.yml is valid"
 	@cd $(COMPOSE_DIR) && docker compose -f compose.offline.yml config --quiet && \
 		echo "✓ compose.offline.yml is valid"
 	@echo "All compose files valid!"
@@ -134,6 +142,49 @@ else
 	@echo "Usage: make shell PROJECT=/path/to/project"
 	@exit 1
 endif
+
+#==============================================================================
+# PERSISTENT MODE (keeps agent running for quick iterations)
+#==============================================================================
+
+up-agent: _check-project _check-auth ## Start persistent agent container (PROJECT=/path)
+	@echo "Starting infrastructure services..."
+	@./$(SCRIPT_DIR)/up.sh
+	@echo ""
+	@echo "Starting persistent agent container..."
+	@cd $(COMPOSE_DIR) && PROJECT_PATH=$(PROJECT_PATH) \
+		docker compose -f compose.base.yml -f compose.persistent.yml up -d agent
+	@echo ""
+	@echo "Agent is running! Use these commands:"
+	@echo "  make claude              - Start interactive Claude session"
+	@echo "  make claude P=\"prompt\"   - Run single prompt"
+	@echo "  make agent-status        - Check agent status"
+	@echo "  make down-agent          - Stop agent"
+
+down-agent: ## Stop persistent agent container
+	@echo "Stopping agent container..."
+	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.persistent.yml down
+	@echo "Agent stopped."
+
+agent-status: ## Show persistent agent status
+	@if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^agent$$'; then \
+		echo "Agent container: RUNNING"; \
+		echo "  Project: $$(docker exec agent pwd 2>/dev/null || echo 'unknown')"; \
+		echo "  Uptime: $$(docker ps --format '{{.Status}}' --filter name=agent)"; \
+	else \
+		echo "Agent container: NOT RUNNING"; \
+		echo "  Start with: make up-agent PROJECT=/path/to/project"; \
+	fi
+
+claude: ## Run Claude in agent (interactive or P="prompt")
+ifdef P
+	@./$(SCRIPT_DIR)/claude-exec.sh "$(P)"
+else
+	@./$(SCRIPT_DIR)/claude-exec.sh
+endif
+
+claude-shell: ## Open bash shell in running agent
+	@./$(SCRIPT_DIR)/claude-exec.sh --shell
 
 #==============================================================================
 # GODOT OPERATIONS
@@ -346,6 +397,20 @@ _check-act:
 # INTERNAL HELPERS
 #==============================================================================
 
+_check-auth:
+	@if [ ! -f ".env" ]; then \
+		echo "Warning: .env file not found"; \
+	fi
+	@if [ -z "$${ANTHROPIC_API_KEY:-}" ] && [ -z "$${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then \
+		if [ -f ".env" ]; then \
+			. ./.env 2>/dev/null || true; \
+		fi; \
+		if [ -z "$${ANTHROPIC_API_KEY:-}" ] && [ -z "$${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then \
+			echo "Warning: No Claude authentication configured in .env"; \
+			echo "  Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN"; \
+		fi; \
+	fi
+
 _check-project:
 ifndef PROJECT_PATH
 ifndef PROJECT
@@ -390,6 +455,8 @@ u: up
 s: status
 l: logs
 r: logs-report
+c: claude
+a: agent-status
 
 # Print configuration
 config: ## Show current configuration
