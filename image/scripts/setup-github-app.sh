@@ -184,33 +184,50 @@ git config --global credential.helper "!f() { echo username=x-access-token; echo
 git config --global url."https://github.com/".insteadOf "git@github.com:"
 
 # Set up MCP configuration for Claude Code
-# MCP servers must be in settings.json with "type": "stdio"
-MCP_CONFIG_DIR="${HOME}/.claude"
-SETTINGS_FILE="${MCP_CONFIG_DIR}/settings.json"
+# MCP servers must be configured in ~/.claude.json, not settings.json
+CLAUDE_CONFIG="${HOME}/.claude.json"
 
-mkdir -p "${MCP_CONFIG_DIR}"
+# Create .claude.json if it doesn't exist
+if [[ ! -f "${CLAUDE_CONFIG}" ]]; then
+    echo "{}" > "${CLAUDE_CONFIG}"
+    chmod 600 "${CLAUDE_CONFIG}"
+fi
 
-# Merge MCP config into existing settings.json
-if [[ -f "${SETTINGS_FILE}" ]]; then
-    # Merge MCP servers into existing settings using jq
-    jq --arg token "${INSTALLATION_TOKEN}" \
-       '.mcpServers.github = {
-          "type": "stdio",
-          "command": "npx",
-          "args": ["-y", "@github/github-mcp-server"],
-          "env": {
+# Use jq to merge MCP config into .claude.json
+TEMP_CONFIG=$(mktemp)
+jq --arg token "${INSTALLATION_TOKEN}" \
+    '.mcpServers.github = {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@github/github-mcp-server"],
+        "env": {
             "GITHUB_PERSONAL_ACCESS_TOKEN": $token
-          }
-        }' "${SETTINGS_FILE}" > "${SETTINGS_FILE}.tmp"
-    mv "${SETTINGS_FILE}.tmp" "${SETTINGS_FILE}"
+        }
+    }' "${CLAUDE_CONFIG}" > "${TEMP_CONFIG}"
+
+# Replace config file with updated version
+mv "${TEMP_CONFIG}" "${CLAUDE_CONFIG}"
+chmod 600 "${CLAUDE_CONFIG}"
+
+# Remove old MCP config files if they exist
+rm -f "${HOME}/.claude/claude_mcp_config.json"
+
+# Also ensure settings.json doesn't have mcpServers (wrong location)
+SETTINGS_FILE="${HOME}/.claude/settings.json"
+if [[ -f "${SETTINGS_FILE}" ]] && jq -e '.mcpServers' "${SETTINGS_FILE}" >/dev/null 2>&1; then
+    TEMP_SETTINGS=$(mktemp)
+    jq 'del(.mcpServers)' "${SETTINGS_FILE}" > "${TEMP_SETTINGS}"
+    mv "${TEMP_SETTINGS}" "${SETTINGS_FILE}"
     chmod 600 "${SETTINGS_FILE}"
-else
-    echo "WARNING: ${SETTINGS_FILE} not found, MCP config not created" >&2
+fi
+
+if [[ "${GITHUB_DEBUG:-}" == "1" ]]; then
+    echo "DEBUG: MCP configuration added to .claude.json" >&2
 fi
 
 echo "✅ GitHub App MCP integration configured" >&2
 echo "   Token expires in ~1 hour" >&2
-echo "   MCP config merged into: ${SETTINGS_FILE}" >&2
+echo "   MCP config: ${CLAUDE_CONFIG}" >&2
 
 # Branch protection (same as setup-git-pat.sh)
 git config --global receive.denyNonFastForwards true
