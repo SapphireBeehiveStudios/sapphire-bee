@@ -1,0 +1,71 @@
+# Cursor Rules for godot-agent
+
+## Response Style
+
+### After Making Changes
+Always provide a commit message in a code block after completing changes:
+
+```
+type(scope): short description
+
+Optional longer explanation of what changed and why.
+```
+
+Use conventional commit types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
+
+### Code Blocks
+- Use fenced code blocks with language identifiers
+- For shell commands users should copy, use ```bash blocks
+
+## Project Patterns
+
+### Docker Compose
+- Use modern syntax: `deploy.resources.limits.pids` instead of legacy `pids_limit`
+- Default environment variables to empty to suppress CI warnings: `${VAR_NAME:-}`
+- The `ANTHROPIC_API_KEY` should never be required in CI - always default to empty
+
+### GitHub Actions
+- Secrets cannot be used directly in `if:` conditions
+- To conditionally run steps based on secrets, set them as job-level `env:` first
+- Use `vars.` for non-sensitive values (like checksums), `secrets.` for credentials
+- Add `load: true` to `docker/build-push-action` when you need the image locally for tests
+- Pin actions to versions (or SHAs for production hardening)
+
+### Dockerfile
+- Use `# hadolint ignore=DL3008` for apt packages (version pinning is impractical)
+- Debian package versions are tied to base image; don't pin exact versions
+
+### Shell Scripts
+- Use `# shellcheck disable=SC2034` for intentionally unused variables (like color constants)
+- Color variables are often defined as a complete set for consistency
+
+### Documentation
+- When adding new steps to numbered guides, update all subsequent step numbers
+- Update related checklists when adding new required steps
+- Keep CICD_SETUP.md and SECURITY.md in sync with actual workflows
+
+## Security Mindset
+
+### Always Consider
+- Never expose secrets in shell history (no `echo "token" | command`)
+- Prefer interactive prompts or file-based auth for credentials
+- Default to minimal permissions (read-only unless write is needed)
+- Secrets scanning should be enabled in repositories
+
+### CI/CD Security
+- Workflows should declare minimal `permissions:` per job
+- Production deployments should use GitHub Environments with approval gates
+- Consider pinning actions to commit SHAs for supply chain security
+
+## Local Development
+
+### Testing CI Locally
+- Use `act` for local GitHub Actions testing
+- Apple Silicon needs `--container-architecture linux/amd64`
+- `make ci` runs the full CI workflow locally
+
+### Make Targets
+- Follow existing naming conventions (kebab-case for multi-word targets)
+- Add helper targets with `_` prefix for internal checks (e.g., `_check-act`)
+- Update `.PHONY` when adding new targets
+

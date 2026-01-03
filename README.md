@@ -102,7 +102,7 @@ If you experience file sync issues, try adding your project directory to Docker 
 
 ```bash
 # 1. Clone this repository
-git clone https://github.com/your-org/godot-agent.git
+git clone https://github.com/SapphireBeehive/godot-agent.git
 cd godot-agent
 
 # 2. Create environment file
@@ -160,8 +160,26 @@ You can use either `make` targets or scripts directly:
 | `make up` | `./scripts/up.sh` |
 | `make run-direct PROJECT=...` | `./scripts/run-claude.sh direct ...` |
 | `make logs` | `docker compose logs -f` |
+| `make ci` | Run CI workflow locally with `act` |
 
 Run `make help` to see all available targets.
+
+### Testing CI Locally
+
+You can run the GitHub Actions CI workflow locally using [act](https://github.com/nektos/act):
+
+```bash
+# Install act
+brew install act
+
+# Run the full CI workflow
+make ci
+
+# Or run specific jobs
+make ci-validate    # Lint and validate
+make ci-build       # Build test
+make ci-dry-run     # Preview without running
+```
 
 ## Running Modes
 
@@ -311,17 +329,17 @@ This repository includes GitHub Actions that automatically build and push images
 
 ```bash
 # Pull the latest image (multi-arch: works on both arm64 and amd64)
-docker pull ghcr.io/SapphireBeehive/claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
 
 # Or pull a specific version
-docker pull ghcr.io/SapphireBeehive/claude-godot-agent:godot-4.3
+docker pull ghcr.io/sapphirebeehive/claude-godot-agent:godot-4.3
 ```
 
 To use the pre-built image instead of building locally, update your `.env`:
 
 ```bash
 # Use pre-built image from GHCR
-AGENT_IMAGE=ghcr.io/SapphireBeehive/claude-godot-agent:latest
+AGENT_IMAGE=ghcr.io/sapphirebeehive/claude-godot-agent:latest
 ```
 
 ### GitHub Actions Setup
@@ -333,16 +351,27 @@ The repository includes two workflows:
 | `ci.yml` | PRs, pushes | Validates compose, lints scripts, test builds |
 | `build-and-push.yml` | Merge to main | Builds multi-arch image, pushes to GHCR |
 
-#### Required Secrets
+#### Required Setup
 
-Set these in your repository settings (Settings → Secrets → Actions):
+Set these in your repository settings:
+
+**Secrets** (Settings → Secrets and variables → Actions → Secrets):
 
 | Secret | Required | Description |
 |--------|----------|-------------|
 | `GITHUB_TOKEN` | Auto | Provided by GitHub, used for GHCR |
-| `GODOT_SHA256` | Yes | SHA256 checksum for Godot binary |
 | `DOCKERHUB_USERNAME` | Optional | For also pushing to Docker Hub |
 | `DOCKERHUB_TOKEN` | Optional | Docker Hub access token |
+
+**Variables** (Settings → Secrets and variables → Actions → Variables):
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GODOT_SHA256` | Optional | SHA256 checksum for Godot binary verification |
+
+**Environment** (Settings → Environments):
+
+Create a `production` environment for the build-and-push workflow. Optionally add required reviewers for deployment approval gates.
 
 #### Manual Build Trigger
 
@@ -369,7 +398,7 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/project \
-            ghcr.io/SapphireBeehive/claude-godot-agent:latest \
+            ghcr.io/sapphirebeehive/claude-godot-agent:latest \
             godot --headless --validate-project
 ```
 
@@ -421,12 +450,15 @@ Recommended workflow for hybrid local/cloud development:
 
 ### Common Issues
 
-**"GODOT_SHA256 is not set"**
+**"GODOT_SHA256 is not set"** (warning, not error)
+
+The build will proceed without checksum verification. To enable verification:
 ```bash
 # Download Godot and get checksum
-curl -LO https://downloads.tuxfamily.org/godotengine/4.3/Godot_v4.3-stable_linux.x86_64.zip
+curl -LO https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
 sha256sum Godot_v4.3-stable_linux.x86_64.zip
 # Add to .env: GODOT_SHA256=<the_checksum>
+# Or add as GitHub variable for CI builds
 ```
 
 **"Docker daemon is not running"**
@@ -495,7 +527,9 @@ godot-agent/
 ├── logs/                      # Session logs (gitignored)
 ├── Makefile                  # Convenient make targets
 ├── .env.example              # Environment template
+├── .cursorrules              # AI assistant conventions
 ├── README.md
+├── CICD_SETUP.md             # Step-by-step CI/CD setup guide
 └── SECURITY.md
 ```
 

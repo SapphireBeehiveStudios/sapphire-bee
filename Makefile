@@ -5,7 +5,7 @@
 
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
         run-godot promote diff-review scan logs-report shell test validate \
-        build-no-cache restart status
+        build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run
 
 # Default target
 .DEFAULT_GOAL := help
@@ -225,6 +225,38 @@ lint-scripts: ## Lint shell scripts with shellcheck
 		echo "All scripts passed!"; \
 	else \
 		echo "shellcheck not installed. Install with: brew install shellcheck"; \
+		exit 1; \
+	fi
+
+#==============================================================================
+# CI/CD LOCAL TESTING (requires: brew install act)
+#==============================================================================
+
+# Architecture flag for Apple Silicon
+ACT_ARCH := $(shell uname -m | grep -q arm64 && echo "--container-architecture linux/amd64" || echo "")
+
+ci: _check-act ## Run full CI workflow locally
+	@echo "Running CI workflow locally..."
+	act push -W .github/workflows/ci.yml $(ACT_ARCH)
+
+ci-validate: _check-act ## Run CI validate job only
+	@echo "Running validate job..."
+	act -j validate $(ACT_ARCH)
+
+ci-build: _check-act ## Run CI build-test job only
+	@echo "Running build-test job..."
+	act -j build-test $(ACT_ARCH)
+
+ci-list: _check-act ## List available CI jobs
+	@act -l
+
+ci-dry-run: _check-act ## Dry run CI (show what would happen)
+	@act push -W .github/workflows/ci.yml -n $(ACT_ARCH)
+
+_check-act:
+	@if ! command -v act >/dev/null 2>&1; then \
+		echo "Error: 'act' is not installed"; \
+		echo "Install with: brew install act"; \
 		exit 1; \
 	fi
 
