@@ -15,13 +15,18 @@ on:
       godot_version:
         description: 'Godot version to build'
         required: false
-        default: '4.3'
+        default: '4.6'
         type: choice
         options:
+          - '4.6'
+          - '4.5'
           - '4.4'
           - '4.3'
-          - '4.2'
-          - '4.1'
+      godot_release_type:
+        description: 'Release type (stable, beta1, rc1, etc.)'
+        required: false
+        default: 'beta1'
+        type: string
       push_latest:
         description: 'Also tag as latest'
         type: boolean
@@ -31,8 +36,8 @@ env:
   # Default registry (GitHub Container Registry)
   REGISTRY: ghcr.io
   # Godot configuration
-  GODOT_VERSION: ${{ github.event.inputs.godot_version || '4.3' }}
-  GODOT_RELEASE_TYPE: stable
+  GODOT_VERSION: ${{ github.event.inputs.godot_version || '4.6' }}
+  GODOT_RELEASE_TYPE: ${{ github.event.inputs.godot_release_type || 'beta1' }}
 
 jobs:
   build-and-push:

@@ -10,8 +10,8 @@ services:
       context: ../image
       dockerfile: Dockerfile
       args:
-        - GODOT_VERSION=${GODOT_VERSION:-4.3}
-        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-stable}
+        - GODOT_VERSION=${GODOT_VERSION:-4.6}
+        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta1}
         - GODOT_SHA256=${GODOT_SHA256:-}
     image: claude-godot-agent:latest
     container_name: agent

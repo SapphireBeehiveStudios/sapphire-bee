@@ -384,7 +384,7 @@ This repository includes GitHub Actions that automatically build and push images
 docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
 
 # Or pull a specific version
-docker pull ghcr.io/sapphirebeehive/claude-godot-agent:godot-4.3
+docker pull ghcr.io/sapphirebeehive/claude-godot-agent:godot-4.6
 ```
 
 To use the pre-built image instead of building locally, update your `.env`:
@@ -507,8 +507,8 @@ Recommended workflow for hybrid local/cloud development:
 The build will proceed without checksum verification. To enable verification:
 ```bash
 # Download Godot and get checksum
-curl -LO https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
-sha256sum Godot_v4.3-stable_linux.x86_64.zip
+curl -LO https://github.com/godotengine/godot/releases/download/4.6-beta1/Godot_v4.6-beta1_linux.x86_64.zip
+sha256sum Godot_v4.6-beta1_linux.x86_64.zip
 # Add to .env: GODOT_SHA256=<the_checksum>
 # Or add as GitHub variable for CI builds
 ```

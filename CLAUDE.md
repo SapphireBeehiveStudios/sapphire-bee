@@ -23,7 +23,7 @@ ghcr.io/sapphirebeehive/claude-godot-agent
 | Tag | Example | Description |
 |-----|---------|-------------|
 | `latest` | `:latest` | Most recent build from main branch |
-| `godot-X.Y` | `:godot-4.3` | Tagged by Godot version |
+| `godot-X.Y` | `:godot-4.6` | Tagged by Godot version |
 | `YYYYMMDD` | `:20250102` | Tagged by build date |
 | `sha-XXXXXX` | `:sha-a1b2c3d` | Tagged by git commit SHA |
 
@@ -385,7 +385,7 @@ When initializing this repo from scratch, follow this exact sequence:
    ```bash
    docker pull ghcr.io/sapphirebeehive/claude-godot-agent:latest
    docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:latest
-   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:4.3
+   docker tag ghcr.io/sapphirebeehive/claude-godot-agent:latest claude-godot-agent:4.6
    ```
 5. **Start infrastructure**: `./scripts/up.sh`
 6. **Verify services**: `make status`
