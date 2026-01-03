@@ -73,17 +73,26 @@ make up
 To enable Claude to clone, commit, and push to GitHub repositories:
 
 ```bash
-# 1. Create a GitHub PAT with appropriate scopes
-# Visit: https://github.com/settings/tokens
-# Required scopes:
-#   - 'repo' (full access) for private repositories
-#   - 'public_repo' (read/write access) for public repositories only
+# 1. Create a GitHub PAT at: https://github.com/settings/tokens
 
 # 2. Add PAT to .env file
 echo 'GITHUB_PAT=ghp_...' >> .env
 
-# 3. Git is automatically configured when container starts (if GITHUB_PAT is set)
+# 3. Git and gh CLI are automatically configured when container starts
 ```
+
+**Required PAT Permissions:**
+
+For **Classic tokens**:
+- `repo` - Full access (private repos, issues, PRs, releases)
+- `public_repo` - Public repos only (if you don't need private repo access)
+
+For **Fine-grained tokens** (recommended - more secure):
+- **Repository access**: Select specific repos or "All repositories"
+- **Contents**: Read and write (git clone/push)
+- **Issues**: Read and write (gh issue commands)
+- **Pull requests**: Read and write (gh pr commands)
+- **Metadata**: Read (required for all operations)
 
 **Inside the container, git and gh CLI work automatically:**
 

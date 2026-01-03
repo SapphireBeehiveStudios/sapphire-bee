@@ -190,21 +190,34 @@ This shows which authentication method is configured and ready to use.
 
 ### Option 3: GitHub Personal Access Token (Optional)
 
-To enable Claude to clone, commit, and push to GitHub repositories, add a GitHub Personal Access Token:
+To enable Claude to clone, commit, push, and manage issues/PRs, add a GitHub Personal Access Token:
 
 ```bash
-# Create a GitHub PAT with 'repo' scope (or 'public_repo' for public repos only)
-# https://github.com/settings/tokens
-
+# Create a GitHub PAT at: https://github.com/settings/tokens
 # Add to .env file
 echo 'GITHUB_PAT=ghp_...' >> .env
 ```
 
+**Required PAT Permissions:**
+
+| Operation | Classic Token | Fine-grained Token |
+|-----------|---------------|-------------------|
+| Clone/push private repos | `repo` | Contents: Read/Write |
+| Clone/push public repos | `public_repo` | Contents: Read/Write |
+| Create/close issues | `repo` | Issues: Read/Write |
+| Create/merge PRs | `repo` | Pull requests: Read/Write |
+| Create releases | `repo` | Contents: Read/Write |
+| View repo metadata | (included) | Metadata: Read (required) |
+
+**Recommended scopes:**
+- **Private repos**: `repo` (classic) or all above permissions (fine-grained)
+- **Public repos only**: `public_repo` (classic) or Contents + Issues + PRs (fine-grained)
+
 **Security Notes:**
-- PAT grants full access to repositories you have access to
-- Use minimal required scopes (`repo` for private repos, `public_repo` for public only)
-- PAT is stored in `.env` (already gitignored)
-- PAT is automatically configured for git operations when the container starts
+- Use fine-grained tokens when possible (more granular, can limit to specific repos)
+- PAT is stored in `.env` (gitignored, not committed)
+- Set token expiration (90 days recommended)
+- PAT is auto-configured for git and gh CLI when container starts
 
 **Usage:**
 ```bash
