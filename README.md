@@ -105,8 +105,13 @@ If you experience file sync issues, try adding your project directory to Docker 
 git clone https://github.com/SapphireBeehive/godot-agent.git
 cd godot-agent
 
-# 2. Create environment file
+# 2. Set up authentication (choose one method)
 cp .env.example .env
+
+# Option A: Claude Max subscription (recommended - included with subscription)
+./scripts/setup-claude-auth.sh login
+
+# Option B: API key (pay-per-use)
 # Edit .env and add your ANTHROPIC_API_KEY
 
 # 3. Run health check
@@ -121,6 +126,49 @@ make up
 # 6. Run Claude with your project
 make run-direct PROJECT=/path/to/your/godot/project
 ```
+
+## Authentication
+
+Claude Code supports two authentication methods. Choose the one that works best for you:
+
+### Option 1: Claude Max Subscription (Recommended)
+
+If you have a Claude Max subscription, you can use it instead of paying for API usage:
+
+```bash
+# Install Claude CLI on your host (if not already installed)
+npm install -g @anthropic-ai/claude-code
+
+# Login with your Claude account
+./scripts/setup-claude-auth.sh login
+
+# Check status
+./scripts/setup-claude-auth.sh status
+```
+
+This opens a browser for OAuth authentication. Your credentials are stored in `~/.claude/` and automatically mounted into containers.
+
+**Note**: If `ANTHROPIC_API_KEY` is set, it takes priority over subscription auth. Unset it to use your Max subscription:
+```bash
+unset ANTHROPIC_API_KEY
+```
+
+### Option 2: API Key (Pay-per-use)
+
+Get an API key from [Anthropic Console](https://console.anthropic.com/) and add it to your `.env` file:
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+### Checking Authentication Status
+
+```bash
+./scripts/setup-claude-auth.sh status
+```
+
+This shows which authentication method is configured and ready to use.
 
 ### Using Make vs Scripts
 

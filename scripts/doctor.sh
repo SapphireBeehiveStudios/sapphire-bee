@@ -108,16 +108,41 @@ else
     check_warn ".env file not found (copy from .env.example)"
 fi
 
+# Check authentication methods (API key OR Claude Max subscription)
+HAS_AUTH=false
+
+# Check for API key
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-    # Check key format without revealing it
     if [[ "${ANTHROPIC_API_KEY}" =~ ^sk-ant- ]]; then
         check_pass "ANTHROPIC_API_KEY is set (starts with sk-ant-...)"
     else
         check_warn "ANTHROPIC_API_KEY is set but has unusual format"
     fi
+    HAS_AUTH=true
 else
-    check_fail "ANTHROPIC_API_KEY is not set"
-    echo "       Create .env file with: ANTHROPIC_API_KEY=your_key"
+    check_info "ANTHROPIC_API_KEY is not set (optional if using Claude Max)"
+fi
+
+# Check for Claude Max subscription credentials
+CLAUDE_CONFIG="${CLAUDE_CONFIG_PATH:-$HOME/.claude}"
+if [[ -d "$CLAUDE_CONFIG" ]]; then
+    if ls "$CLAUDE_CONFIG"/*.json &> /dev/null 2>&1 || \
+       ls "$CLAUDE_CONFIG"/credentials* &> /dev/null 2>&1 || \
+       ls "$CLAUDE_CONFIG"/auth* &> /dev/null 2>&1; then
+        check_pass "Claude Max credentials found in $CLAUDE_CONFIG"
+        HAS_AUTH=true
+    else
+        check_info "Claude config exists but no credentials found"
+    fi
+else
+    check_info "Claude Max config not found at $CLAUDE_CONFIG"
+fi
+
+# Require at least one auth method
+if [[ "$HAS_AUTH" == "false" ]]; then
+    check_fail "No Claude authentication configured"
+    echo "       Option 1: Add ANTHROPIC_API_KEY to .env file"
+    echo "       Option 2: Run ./scripts/setup-claude-auth.sh login"
 fi
 
 echo ""

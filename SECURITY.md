@@ -58,9 +58,32 @@ network_mode: host  # ❌ NEVER
 *.amazonaws.com  # ❌ NEVER - includes S3, secrets
 ```
 
-## API Key Security
+## Authentication Security
 
-### If Your Anthropic API Key is Exposed
+The sandbox supports two authentication methods. Choose the one appropriate for your use case.
+
+### Claude Max Subscription (Recommended)
+
+Using your Claude Max subscription credentials is recommended because:
+- No API key to accidentally expose
+- Usage included with subscription (no surprise charges)
+- Credentials stored securely in `~/.claude/`
+
+**Setup**:
+```bash
+./scripts/setup-claude-auth.sh login
+```
+
+**Security notes**:
+- Credentials are mounted read-only into containers
+- Logout with `./scripts/setup-claude-auth.sh logout` if compromised
+- Don't share your `~/.claude/` directory
+
+### API Key Authentication
+
+If using an API key (pay-per-use):
+
+**If Your Anthropic API Key is Exposed**:
 
 1. **Immediately revoke the key**:
    - Go to https://console.anthropic.com/
@@ -86,13 +109,14 @@ network_mode: host  # ❌ NEVER
    - If the key was committed to git, consider other secrets in that repo compromised
    - Rotate any tokens/passwords that might have been in the same files
 
-### Best Practices for API Keys
+### Best Practices
 
-1. **Use `.env` files** (gitignored)
-2. **Never commit secrets** to version control
-3. **Use short-lived keys** when possible
-4. **Set up spending limits** in Anthropic console
+1. **Prefer Claude Max** over API keys when possible
+2. **Use `.env` files** (gitignored) for API keys
+3. **Never commit secrets** to version control
+4. **Set up spending limits** in Anthropic console if using API keys
 5. **Monitor usage** for anomalies
+6. **Run `./scripts/setup-claude-auth.sh status`** to verify your configuration
 
 ## Reviewing Suspicious Code
 

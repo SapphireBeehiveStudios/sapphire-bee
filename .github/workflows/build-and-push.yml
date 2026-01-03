@@ -58,6 +58,7 @@ jobs:
         run: echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/claude-godot-agent" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
+        if: ${{ !env.ACT }}
         uses: docker/setup-qemu-action@v3
         with:
           platforms: linux/arm64,linux/amd64
@@ -101,8 +102,9 @@ jobs:
         with:
           context: ./image
           file: ./image/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
+          platforms: ${{ env.ACT && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ !env.ACT }}
+          load: ${{ env.ACT && true || false }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
