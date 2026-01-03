@@ -3,7 +3,7 @@
 # NXDOMAIN for everything else.
 
 # Allowlisted domains - return proxy IPs from hosts file
-github.com. www.github.com. raw.githubusercontent.com. codeload.github.com. docs.godotengine.org. api.anthropic.com. {
+github.com. www.github.com. raw.githubusercontent.com. codeload.github.com. api.github.com. docs.godotengine.org. api.anthropic.com. {
     log {
         class all
     }

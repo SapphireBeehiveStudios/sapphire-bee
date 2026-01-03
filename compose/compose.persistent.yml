@@ -26,9 +26,17 @@ services:
     restart: unless-stopped
     
     # Environment - authentication via API key OR Claude Max OAuth token
+    # GitHub: App authentication (recommended) > PAT (legacy)
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # GitHub App authentication (recommended)
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+      - GITHUB_APP_REPOSITORIES=${GITHUB_APP_REPOSITORIES:-}
+      # GitHub PAT (legacy fallback)
       - GITHUB_PAT=${GITHUB_PAT:-}
       - HOME=/home/claude
       - USER=claude

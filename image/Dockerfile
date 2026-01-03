@@ -54,6 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     file \
     make \
+    # Python for GitHub App token generation
+    python3 \
     # Godot runtime dependencies
     libfontconfig1 \
     libgl1 \
@@ -63,6 +65,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv for Python package management (faster than pip)
+# hadolint ignore=DL3013
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
+    && uv pip install --system --break-system-packages PyJWT cryptography requests
 
 # Install GitHub CLI (gh) for repo management (issues, PRs, etc.)
 # hadolint ignore=DL3008
@@ -99,12 +106,15 @@ COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
 # Scripts change more frequently, so they're copied later
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/setup-git-pat.sh /opt/scripts/setup-git-pat.sh
+COPY scripts/setup-github-app.sh /opt/scripts/setup-github-app.sh
 COPY scripts/clone-repo.sh /opt/scripts/clone-repo.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /opt/scripts/setup-git-pat.sh /opt/scripts/clone-repo.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /opt/scripts/setup-git-pat.sh \
+    /opt/scripts/setup-github-app.sh /opt/scripts/clone-repo.sh
 
 # Copy config files last (they change most frequently)
 # This minimizes cache invalidation when only config changes
 COPY config/claude-settings.json /etc/claude/settings.json
+COPY config/sandbox-context.md /etc/claude/sandbox-context.md
 
 # Set environment variables (stable, rarely changes)
 ENV HOME=/home/claude

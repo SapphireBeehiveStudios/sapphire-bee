@@ -8,6 +8,9 @@
 10.100.1.10 github.com
 10.100.1.10 www.github.com
 
+# GitHub API (for GitHub App tokens and MCP server)
+10.100.1.15 api.github.com
+
 # GitHub raw content (for fetching raw files)
 10.100.1.11 raw.githubusercontent.com
 

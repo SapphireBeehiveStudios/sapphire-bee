@@ -40,6 +40,15 @@ setup_claude_config() {
         echo "WARNING: /etc/claude/settings.json not found, Claude permissions may not be configured" >&2
     fi
     
+    # Copy sandbox context to home directory as CLAUDE.md
+    # This provides sandbox context without conflicting with project CLAUDE.md
+    if [[ -f /etc/claude/sandbox-context.md ]]; then
+        cp /etc/claude/sandbox-context.md "${CLAUDE_CONFIG_DIR}/CLAUDE.md"
+        if [[ "${CLAUDE_DEBUG:-}" == "1" ]]; then
+            echo "DEBUG: Sandbox context copied to ${CLAUDE_CONFIG_DIR}/CLAUDE.md" >&2
+        fi
+    fi
+    
     # Mark that we've accepted terms (prevents interactive prompt)
     touch "${CLAUDE_CONFIG_DIR}/.terms-accepted"
     
@@ -58,9 +67,17 @@ setup_claude_config() {
 # Run setup
 setup_claude_config
 
-# Optionally configure git and gh with GitHub PAT if available
-if [[ -n "${GITHUB_PAT:-}" ]]; then
-    # Configure git credentials
+# Configure GitHub authentication (GitHub App takes priority over PAT)
+if [[ -n "${GITHUB_APP_ID:-}" ]] && [[ -n "${GITHUB_APP_INSTALLATION_ID:-}" ]]; then
+    # GitHub App authentication (recommended)
+    if [[ -f /opt/scripts/setup-github-app.sh ]]; then
+        # shellcheck source=/dev/null
+        source /opt/scripts/setup-github-app.sh || {
+            echo "WARNING: GitHub App setup failed, falling back to PAT if available" >&2
+        }
+    fi
+elif [[ -n "${GITHUB_PAT:-}" ]]; then
+    # Personal Access Token authentication (legacy)
     if [[ -f /opt/scripts/setup-git-pat.sh ]]; then
         # shellcheck source=/dev/null
         source /opt/scripts/setup-git-pat.sh || true
@@ -73,6 +90,11 @@ if [[ -n "${GITHUB_PAT:-}" ]]; then
     if command -v gh >/dev/null 2>&1; then
         gh config set git_protocol https --host github.com 2>/dev/null || true
     fi
+fi
+
+# Set default git protocol to https for GitHub CLI
+if command -v gh >/dev/null 2>&1; then
+    gh config set git_protocol https --host github.com 2>/dev/null || true
 fi
 
 # Execute the provided command or default to bash

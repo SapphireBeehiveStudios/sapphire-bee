@@ -4,6 +4,11 @@
 .env.*.local
 .secrets
 
+# GitHub App private keys
+*.pem
+secrets/
+!secrets/.gitkeep
+
 # Logs
 logs/
 *.log

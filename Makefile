@@ -8,8 +8,10 @@
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
+        test-github-app-module test-github-app-integration \
         up-agent down-agent claude claude-print claude-shell agent-status verify-permissions \
-        queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results
+        queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
+        github-app-test github-app-validate
 
 # Default target
 .DEFAULT_GOAL := help
@@ -87,6 +89,40 @@ github-pat: ## Create GitHub PAT for a repository (usage: make github-pat REPO=o
 		exit 1; \
 	fi
 	@./$(SCRIPT_DIR)/create-github-pat.sh $(REPO)
+
+github-app-test: _check-tests ## Test GitHub App credentials and token generation
+	@echo "Testing GitHub App credentials..."
+	@$(VENV_PYTHON) -m github_app.test_github_app $(if $(REPOS),--repositories $(REPOS))
+
+github-app-validate: _check-tests ## Validate GitHub App setup (quick check)
+	@echo "Validating GitHub App configuration..."
+	@if [ -z "$${GITHUB_APP_ID:-}" ]; then \
+		if [ -f ".env" ]; then \
+			. ./.env 2>/dev/null || true; \
+		fi; \
+	fi; \
+	if [ -z "$${GITHUB_APP_ID:-}" ]; then \
+		echo "❌ GITHUB_APP_ID not set"; \
+		echo "   Set in .env or environment"; \
+		exit 1; \
+	fi; \
+	if [ -z "$${GITHUB_APP_INSTALLATION_ID:-}" ]; then \
+		echo "❌ GITHUB_APP_INSTALLATION_ID not set"; \
+		exit 1; \
+	fi; \
+	if [ -z "$${GITHUB_APP_PRIVATE_KEY:-}" ] && [ -z "$${GITHUB_APP_PRIVATE_KEY_PATH:-}" ]; then \
+		echo "❌ No private key configured"; \
+		echo "   Set GITHUB_APP_PRIVATE_KEY (base64) or GITHUB_APP_PRIVATE_KEY_PATH"; \
+		exit 1; \
+	fi; \
+	echo "✅ GitHub App configuration looks valid"; \
+	echo "   App ID: $${GITHUB_APP_ID}"; \
+	echo "   Installation ID: $${GITHUB_APP_INSTALLATION_ID}"; \
+	if [ -n "$${GITHUB_APP_PRIVATE_KEY_PATH:-}" ]; then \
+		echo "   Private Key: $${GITHUB_APP_PRIVATE_KEY_PATH}"; \
+	else \
+		echo "   Private Key: [base64 encoded]"; \
+	fi
 
 build: ## Build the agent container image
 	@GODOT_VERSION=$(GODOT_VERSION) \
@@ -451,6 +487,14 @@ test-filesystem: _check-tests ## Run filesystem restriction tests only
 test-offline: _check-tests ## Run offline mode tests only
 	@echo "Running offline mode tests..."
 	@cd tests && ../$(VENV_PYTEST) test_offline_mode.py -v
+
+test-github-app-module: _check-tests ## Run GitHub App module unit tests
+	@echo "Running GitHub App module tests..."
+	@cd tests && ../$(VENV_PYTEST) test_github_app_module.py -v
+
+test-github-app-integration: _check-tests build ## Run GitHub App integration tests
+	@echo "Running GitHub App integration tests..."
+	@cd tests && ../$(VENV_PYTEST) test_github_app_integration.py -v
 
 _check-tests:
 	@if ! docker info >/dev/null 2>&1; then \

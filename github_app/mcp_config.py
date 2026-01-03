@@ -1,0 +1,196 @@
+"""
+MCP Configuration Generator for GitHub MCP Server
+
+Generates the MCP configuration file that Claude Code uses to connect
+to the GitHub MCP server with installation token authentication.
+
+The GitHub MCP server (@github/github-mcp-server) uses the
+GITHUB_PERSONAL_ACCESS_TOKEN environment variable for authentication,
+but it works equally well with GitHub App installation tokens.
+
+Example:
+    from github_app import GitHubAppTokenGenerator, MCPConfigGenerator
+    
+    # Generate installation token
+    token_gen = GitHubAppTokenGenerator(...)
+    token_result = token_gen.generate_installation_token()
+    
+    # Create MCP config
+    mcp_gen = MCPConfigGenerator()
+    config = mcp_gen.generate_config(token_result["token"])
+    
+    # Write to Claude's MCP config location
+    mcp_gen.write_config(config, "/home/claude/.claude/claude_mcp_config.json")
+"""
+
+import json
+from pathlib import Path
+from typing import Optional
+
+
+class MCPConfigGenerator:
+    """
+    Generates MCP configuration for the GitHub MCP server.
+    
+    The configuration tells Claude Code how to launch and authenticate
+    with the GitHub MCP server.
+    """
+    
+    # Default MCP server command
+    DEFAULT_COMMAND = "npx"
+    DEFAULT_ARGS = ["-y", "@github/github-mcp-server"]
+    
+    def __init__(
+        self,
+        command: str = DEFAULT_COMMAND,
+        args: Optional[list[str]] = None
+    ):
+        """
+        Initialize the MCP config generator.
+        
+        Args:
+            command: Command to run the MCP server (default: npx)
+            args: Arguments for the command (default: ["-y", "@github/github-mcp-server"])
+        """
+        self.command = command
+        self.args = args if args is not None else self.DEFAULT_ARGS.copy()
+    
+    def generate_config(
+        self,
+        github_token: str,
+        additional_env: Optional[dict[str, str]] = None,
+        additional_servers: Optional[dict] = None
+    ) -> dict:
+        """
+        Generate MCP configuration with GitHub server.
+        
+        Args:
+            github_token: GitHub installation token or PAT
+            additional_env: Extra environment variables for the GitHub server
+            additional_servers: Other MCP servers to include in config
+        
+        Returns:
+            Dict containing the complete MCP configuration
+        """
+        # Build environment for GitHub server
+        github_env = {
+            # The GitHub MCP server uses this env var for authentication
+            # It works with both PATs and installation tokens
+            "GITHUB_PERSONAL_ACCESS_TOKEN": github_token,
+        }
+        
+        if additional_env:
+            github_env.update(additional_env)
+        
+        # Build MCP servers config
+        mcp_servers = {
+            "github": {
+                "command": self.command,
+                "args": self.args,
+                "env": github_env,
+            }
+        }
+        
+        if additional_servers:
+            mcp_servers.update(additional_servers)
+        
+        return {
+            "mcpServers": mcp_servers
+        }
+    
+    def write_config(
+        self,
+        config: dict,
+        path: str,
+        merge_existing: bool = True
+    ) -> Path:
+        """
+        Write MCP configuration to a file.
+        
+        Args:
+            config: MCP configuration dict from generate_config()
+            path: Path to write the configuration file
+            merge_existing: If True, merge with existing config file
+        
+        Returns:
+            Path to the written config file
+        """
+        config_path = Path(path)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Optionally merge with existing config
+        if merge_existing and config_path.exists():
+            try:
+                existing = json.loads(config_path.read_text())
+                # Merge mcpServers
+                if "mcpServers" in existing:
+                    existing["mcpServers"].update(config.get("mcpServers", {}))
+                    config = existing
+            except (json.JSONDecodeError, KeyError):
+                # If existing file is invalid, overwrite completely
+                pass
+        
+        config_path.write_text(json.dumps(config, indent=2) + "\n")
+        return config_path
+    
+    def generate_env_file(
+        self,
+        github_token: str,
+        path: str
+    ) -> Path:
+        """
+        Generate an environment file for the GitHub MCP server.
+        
+        Alternative to JSON config - can be sourced by shell scripts.
+        
+        Args:
+            github_token: GitHub installation token or PAT
+            path: Path to write the env file
+        
+        Returns:
+            Path to the written env file
+        """
+        env_path = Path(path)
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        content = f"""# GitHub MCP Server Environment
+# Generated by github_app module
+# Token expires in ~1 hour
+
+GITHUB_PERSONAL_ACCESS_TOKEN={github_token}
+"""
+        
+        env_path.write_text(content)
+        # Set restrictive permissions
+        env_path.chmod(0o600)
+        
+        return env_path
+
+
+def create_mcp_config_for_agent(
+    github_token: str,
+    config_dir: str = "/home/claude/.claude",
+    additional_servers: Optional[dict] = None
+) -> Path:
+    """
+    Convenience function to create MCP config for the Godot agent.
+    
+    This is the main entry point for the entrypoint.sh script.
+    
+    Args:
+        github_token: GitHub installation token
+        config_dir: Claude configuration directory
+        additional_servers: Optional additional MCP servers
+    
+    Returns:
+        Path to the created config file
+    """
+    generator = MCPConfigGenerator()
+    config = generator.generate_config(
+        github_token=github_token,
+        additional_servers=additional_servers
+    )
+    
+    config_path = Path(config_dir) / "claude_mcp_config.json"
+    return generator.write_config(config, str(config_path))
+

@@ -1,6 +1,6 @@
-# Security Tests
+# Security & Integration Tests
 
-This directory contains comprehensive tests for the Claude-Godot Sandbox security features.
+This directory contains comprehensive tests for the Claude-Godot Sandbox security features and integrations.
 
 ## Overview
 
@@ -11,6 +11,8 @@ The tests verify:
 3. **Container Hardening** - Read-only filesystem, dropped capabilities, non-root user, resource limits
 4. **Filesystem Restrictions** - Only project directory mounted, no sensitive paths exposed
 5. **Offline Mode** - Zero network access with network_mode: none
+6. **GitHub App Module** - Token generation and MCP config (unit tests)
+7. **GitHub App Integration** - DNS/proxy for api.github.com, env vars, scripts
 
 ## Prerequisites
 
@@ -51,6 +53,12 @@ pytest tests/test_container_hardening.py
 
 # Offline mode only
 pytest tests/test_offline_mode.py
+
+# GitHub App module (unit tests - no Docker needed)
+make test-github-app-module
+
+# GitHub App integration (requires Docker)
+make test-github-app-integration
 ```
 
 ### With options
@@ -76,14 +84,67 @@ pytest tests/ -m "not slow"
 
 ```
 tests/
-├── conftest.py              # Fixtures: DockerComposeStack, containers
-├── pytest.ini               # Pytest configuration
-├── requirements.txt         # Test dependencies
-├── test_dns_filtering.py    # DNS allowlist/blocklist tests
-├── test_network_restrictions.py  # Network isolation tests
-├── test_container_hardening.py   # Security hardening tests
+├── conftest.py                    # Fixtures: DockerComposeStack, containers
+├── pytest.ini                     # Pytest configuration
+├── requirements.txt               # Test dependencies
+├── test_dns_filtering.py          # DNS allowlist/blocklist tests
+├── test_network_restrictions.py   # Network isolation tests
+├── test_container_hardening.py    # Security hardening tests
 ├── test_filesystem_restrictions.py  # Mount/volume tests
-└── test_offline_mode.py     # Offline mode tests
+├── test_offline_mode.py           # Offline mode tests
+├── test_github_app_module.py      # GitHub App Python module unit tests
+└── test_github_app_integration.py # GitHub App container integration tests
+```
+
+## GitHub App Tests
+
+### Unit Tests (`test_github_app_module.py`)
+
+Tests the Python `github_app` module without requiring Docker:
+
+- **GitHubAppTokenGenerator**
+  - JWT generation with private key
+  - Installation token generation (mocked API)
+  - Token expiry calculations
+  - Credential validation
+
+- **MCPConfigGenerator**
+  - MCP config file generation
+  - Config merging with existing files
+  - Environment file generation
+
+```bash
+# Run without Docker
+make test-github-app-module
+```
+
+### Integration Tests (`test_github_app_integration.py`)
+
+Tests the container-level integration:
+
+- **DNS/Proxy**
+  - api.github.com resolves to proxy IP
+  - Proxy accepts connections
+
+- **Environment Variables**
+  - GITHUB_APP_ID passed to container
+  - GITHUB_APP_INSTALLATION_ID passed to container
+
+- **Scripts**
+  - setup-github-app.sh exists and is executable
+  - Script skips gracefully without config
+
+- **Python Dependencies**
+  - PyJWT, cryptography, requests installed
+  - uv package manager available
+
+- **Sandbox Context**
+  - sandbox-context.md copied to ~/.claude/CLAUDE.md
+  - File mentions MCP tools
+
+```bash
+# Requires Docker and built image
+make test-github-app-integration
 ```
 
 ## Writing New Tests

@@ -188,9 +188,31 @@ This shows which authentication method is configured and ready to use.
 
 **Note**: If both are set, `ANTHROPIC_API_KEY` takes priority over `CLAUDE_CODE_OAUTH_TOKEN`.
 
-### Option 3: GitHub Personal Access Token (Optional)
+### Option 3: GitHub Access (Choose One)
 
-To enable Claude to clone, commit, push, and manage issues/PRs, add a GitHub Personal Access Token:
+To enable Claude to clone, commit, push, and manage issues/PRs:
+
+#### Option A: GitHub App (Recommended)
+
+GitHub Apps provide **short-lived tokens** (1 hour) with fine-grained permissions. See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup instructions.
+
+```bash
+# Quick setup (after creating GitHub App - see docs)
+echo 'GITHUB_APP_ID=123456' >> .env
+echo 'GITHUB_APP_INSTALLATION_ID=12345678' >> .env
+echo 'GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem' >> .env
+
+# Test the configuration
+make github-app-test
+```
+
+**Benefits:**
+- ✅ Tokens auto-expire in 1 hour (no cleanup needed)
+- ✅ Fine-grained per-repository access
+- ✅ Audit logs show "github-app/your-app" (not your username)
+- ✅ Higher API rate limits
+
+#### Option B: Personal Access Token (Legacy)
 
 ```bash
 # Create a PAT with the right permissions for your repo
@@ -212,15 +234,12 @@ echo 'GITHUB_PAT=github_pat_...' >> .env
 | Create releases | `repo` | Contents: Read/Write |
 | View repo metadata | (included) | Metadata: Read (required) |
 
-**Recommended scopes:**
-- **Private repos**: `repo` (classic) or all above permissions (fine-grained)
-- **Public repos only**: `public_repo` (classic) or Contents + Issues + PRs (fine-grained)
-
 **Security Notes:**
 - Use fine-grained tokens when possible (more granular, can limit to specific repos)
 - PAT is stored in `.env` (gitignored, not committed)
 - Set token expiration (90 days recommended)
-- PAT is auto-configured for git and gh CLI when container starts
+
+#### Common Features (Both Options)
 
 **Branch Protection (built-in):**
 - ⛔ Direct pushes to `main`/`master` branches are **blocked**
@@ -230,7 +249,7 @@ echo 'GITHUB_PAT=github_pat_...' >> .env
 
 **Usage:**
 ```bash
-# Inside the container, git and gh are automatically configured if GITHUB_PAT is set
+# Inside the container, git and gh are automatically configured
 
 # Clone a repository:
 /opt/scripts/clone-repo.sh owner/repo
@@ -248,6 +267,14 @@ gh pr create --title "Fix bug" --body "Description"
 gh pr list
 gh pr merge 123
 ```
+
+**MCP Integration (GitHub App only):**
+
+When using GitHub App authentication, Claude Code automatically has access to GitHub MCP tools:
+- `get_file_contents` - Read files from repos
+- `search_code` - Search across repositories
+- `create_issue` / `create_pull_request` - Manage issues and PRs
+- `list_commits` - View commit history
 
 ### Using Make vs Scripts
 
@@ -871,6 +898,8 @@ godot-agent/
 ## Documentation
 
 - **[Workflow Guide](docs/WORKFLOW_GUIDE.md)** - Detailed guide for Persistent and Queue modes
+- **[GitHub App Setup](docs/GITHUB_APP_SETUP.md)** - Configure GitHub App for secure repo access
+- **[GitHub App MCP Integration](docs/GITHUB_APP_MCP_INTEGRATION.md)** - Technical implementation details
 - **[Logging Guide](docs/LOGS.md)** - Where logs are stored and how to access them
 - **[CLAUDE.md](CLAUDE.md)** - Context file for Claude instances
 - **[SECURITY.md](SECURITY.md)** - Threat model and security considerations

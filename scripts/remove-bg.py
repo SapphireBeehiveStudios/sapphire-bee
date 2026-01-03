@@ -7,7 +7,7 @@ from pathlib import Path
 try:
     from PIL import Image
 except ImportError:
-    print("Error: Pillow not installed. Run: pip install Pillow")
+    print("Error: Pillow not installed. Run: uv pip install Pillow")
     sys.exit(1)
 
 
