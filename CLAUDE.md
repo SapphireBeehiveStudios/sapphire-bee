@@ -13,8 +13,49 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
 
 **Permissions**: Claude Code runs with all permissions pre-granted (file edits, command execution, etc.) since security is enforced by the container sandbox, not by Claude's internal permission system. See `image/config/claude-settings.json` for the full list.
 
+## ⚠️ Two Contexts: Host vs Sandboxed Agent
+
+This file (`CLAUDE.md`) documents **host-side operations** - commands run on the developer's machine to manage the sandbox infrastructure.
+
+**If you are Claude running INSIDE the sandbox container**, your context file is:
+```
+/project/.claude/sandbox-context.md
+```
+Or see `image/config/sandbox-context.md` in this repo for the full reference.
+
+### Key Differences
+
+| Context | GitHub Access | Git Operations | File Access |
+|---------|---------------|----------------|-------------|
+| **Host** (this file) | `gh` CLI, git with SSH | Full git access | Full filesystem |
+| **Sandboxed Agent** | **MCP tools only** | git for local ops, MCP for remote | Only `/project` |
+
+### For Sandboxed Agents: Use MCP Tools, NOT `gh`
+
+When running inside the container, **do NOT use `gh` CLI** for GitHub operations. Instead use MCP tools:
+
+| Task | ❌ Don't Use | ✅ Use Instead |
+|------|-------------|----------------|
+| List issues | `gh issue list` | `list_issues` MCP tool |
+| Create issue | `gh issue create` | `create_issue` MCP tool |
+| Create PR | `gh pr create` | `create_pull_request` MCP tool |
+| Comment on issue | `gh issue comment` | `create_issue_comment` MCP tool |
+| Read remote file | `gh api` | `get_file_contents` MCP tool |
+
+**Why?** The `gh` CLI requires authentication setup that may not be available in the sandbox. MCP tools are pre-configured with GitHub App authentication.
+
+**Git CLI is fine for local operations:**
+```bash
+git status          # ✅ OK
+git add .           # ✅ OK  
+git commit -m "..."  # ✅ OK
+git checkout -b ...  # ✅ OK
+git push            # ⚠️ Use MCP push_files if git push fails
+```
+
 ## Contents
 
+- [Two Contexts: Host vs Sandboxed Agent](#️-two-contexts-host-vs-sandboxed-agent)
 - [Pre-built Image](#pre-built-image)
 - [Skills](#skills)
   - [First-Time Setup](#skill-first-time-setup)
@@ -33,6 +74,7 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
   - [Testing CI Locally](#skill-testing-ci-locally)
   - [Building with Different Godot Versions](#skill-building-with-different-godot-versions)
   - [Adding a New Allowed Domain](#skill-adding-a-new-allowed-domain)
+  - [Sandboxed Agent Workflows](#skill-sandboxed-agent-workflows)
 - [Repository Structure](#repository-structure)
 - [Logging](#logging)
 - [Makefile Quick Reference](#makefile-quick-reference)
@@ -127,7 +169,31 @@ For **Fine-grained tokens** (recommended - more secure):
 - **Pull requests**: Read and write (gh pr commands)
 - **Metadata**: Read (required for all operations)
 
-**Inside the container, git and gh CLI work automatically:**
+**Inside the container - Two Options:**
+
+#### Option 1: MCP Tools (Recommended for Sandboxed Agents)
+
+When running as an autonomous agent, use MCP tools for GitHub API operations:
+
+```
+# List issues
+Use list_issues with owner and repo parameters
+
+# Create an issue  
+Use create_issue with owner, repo, title, body
+
+# Create a PR
+Use create_pull_request with owner, repo, title, body, head, base
+
+# Comment on issue (to claim it)
+Use create_issue_comment with owner, repo, issue_number, body
+```
+
+**Why MCP tools?** They're pre-authenticated via GitHub App and work reliably in the sandbox.
+
+#### Option 2: Git + gh CLI (When PAT is Configured)
+
+If `GITHUB_PAT` is set in `.env`, git and `gh` CLI also work:
 
 ```bash
 # Clone a repository using the helper script
@@ -143,7 +209,7 @@ git add .
 git commit -m "Changes made by Claude"
 git push
 
-# GitHub CLI (gh) for full repo management:
+# GitHub CLI (gh) for repo management (HOST-SIDE or when PAT configured):
 gh issue list                                   # List issues
 gh issue create --title "Bug" --body "Details"  # Create issue
 gh issue close 123                              # Close issue
@@ -152,6 +218,8 @@ gh pr list                                      # List PRs
 gh pr merge 123                                 # Merge PR
 gh release create v1.0.0                        # Create release
 ```
+
+> **Note for Sandboxed Agents:** If `gh` commands fail with auth errors, fall back to MCP tools. MCP tools are always available; `gh` depends on PAT configuration.
 
 **Security Notes:**
 - PAT grants full repository access - use minimal required scopes
@@ -541,6 +609,57 @@ To allow the sandbox to access a new domain:
    ```bash
    make restart
    ```
+
+### Skill: Sandboxed Agent Workflows
+
+When Claude runs **inside the sandbox container**, it operates as an autonomous agent with specific workflows for handling tasks. The complete reference is in `image/config/sandbox-context.md`.
+
+#### Three Operating Modes
+
+| Mode | How Work Arrives | Use Case |
+|------|------------------|----------|
+| **Issue Mode** | Browse open GitHub issues | Standard feature work, bug fixes |
+| **Queue Mode** | Read from `/project/.queue` file | Async batch processing |
+| **Prompt Mode** | Direct instruction in prompt | Quick fixes, experiments |
+
+#### Standard Issue Mode Workflow
+
+```
+1. FIND    → Use list_issues MCP tool to find unclaimed issues
+2. CLAIM   → Use create_issue_comment to claim the issue
+3. BRANCH  → git checkout -b claude/issue-N-description
+4. CODE    → Implement the solution + write tests
+5. TEST    → godot --headless -s res://tests/test_runner.gd
+6. PUSH    → Use push_files or git push
+7. PR      → Use create_pull_request MCP tool
+8. WAIT    → Do NOT merge. Human reviews and merges.
+```
+
+#### Key Rules for Sandboxed Agents
+
+1. **Use MCP tools for GitHub** - NOT `gh` CLI
+2. **Always write tests** - Every change needs tests
+3. **Claim before working** - Comment on issue to prevent duplicates
+4. **Never merge PRs** - Human reviews and approves
+5. **Never push to main** - Always use feature branches
+
+#### Quick Reference for Sandboxed Agents
+
+```bash
+# Validate project
+godot --headless --validate-project
+
+# Run tests
+godot --headless -s res://tests/test_runner.gd
+
+# Create branch
+git checkout -b claude/issue-42-feature-name
+
+# Commit
+git add -A && git commit -m "feat: description"
+```
+
+For the full sandboxed agent context, see `image/config/sandbox-context.md`.
 
 ---
 
