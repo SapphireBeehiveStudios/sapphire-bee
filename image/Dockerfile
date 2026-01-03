@@ -111,8 +111,10 @@ COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/setup-git-pat.sh /opt/scripts/setup-git-pat.sh
 COPY scripts/setup-github-app.sh /opt/scripts/setup-github-app.sh
 COPY scripts/clone-repo.sh /opt/scripts/clone-repo.sh
+COPY scripts/verify-mcp.sh /opt/scripts/verify-mcp.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /opt/scripts/setup-git-pat.sh \
-    /opt/scripts/setup-github-app.sh /opt/scripts/clone-repo.sh
+    /opt/scripts/setup-github-app.sh /opt/scripts/clone-repo.sh \
+    /opt/scripts/verify-mcp.sh
 
 # Copy config files last (they change most frequently)
 # This minimizes cache invalidation when only config changes

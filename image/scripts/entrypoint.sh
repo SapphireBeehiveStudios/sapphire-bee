@@ -97,6 +97,24 @@ if command -v gh >/dev/null 2>&1; then
     gh config set git_protocol https --host github.com 2>/dev/null || true
 fi
 
+# Verify MCP configuration if GitHub auth was set up
+if [[ -n "${GITHUB_TOKEN:-}" ]] || [[ -n "${GH_TOKEN:-}" ]]; then
+    if [[ -f /opt/scripts/verify-mcp.sh ]]; then
+        echo "" >&2
+        if [[ "${GITHUB_DEBUG:-}" == "1" ]]; then
+            /opt/scripts/verify-mcp.sh --verbose || {
+                echo "WARNING: MCP verification failed, some GitHub features may not work" >&2
+            }
+        else
+            /opt/scripts/verify-mcp.sh || {
+                echo "WARNING: MCP verification failed, some GitHub features may not work" >&2
+                echo "  Run with GITHUB_DEBUG=1 for details" >&2
+            }
+        fi
+        echo "" >&2
+    fi
+fi
+
 # Execute the provided command or default to bash
 exec "$@"
 
