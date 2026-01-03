@@ -184,30 +184,33 @@ git config --global credential.helper "!f() { echo username=x-access-token; echo
 git config --global url."https://github.com/".insteadOf "git@github.com:"
 
 # Set up MCP configuration for Claude Code
+# MCP servers must be in settings.json with "type": "stdio"
 MCP_CONFIG_DIR="${HOME}/.claude"
-MCP_CONFIG_FILE="${MCP_CONFIG_DIR}/claude_mcp_config.json"
+SETTINGS_FILE="${MCP_CONFIG_DIR}/settings.json"
 
 mkdir -p "${MCP_CONFIG_DIR}"
 
-cat > "${MCP_CONFIG_FILE}" << MCPCONFIG
-{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@github/github-mcp-server"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${INSTALLATION_TOKEN}"
-      }
-    }
-  }
-}
-MCPCONFIG
-
-chmod 600 "${MCP_CONFIG_FILE}"
+# Merge MCP config into existing settings.json
+if [[ -f "${SETTINGS_FILE}" ]]; then
+    # Merge MCP servers into existing settings using jq
+    jq --arg token "${INSTALLATION_TOKEN}" \
+       '.mcpServers.github = {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@github/github-mcp-server"],
+          "env": {
+            "GITHUB_PERSONAL_ACCESS_TOKEN": $token
+          }
+        }' "${SETTINGS_FILE}" > "${SETTINGS_FILE}.tmp"
+    mv "${SETTINGS_FILE}.tmp" "${SETTINGS_FILE}"
+    chmod 600 "${SETTINGS_FILE}"
+else
+    echo "WARNING: ${SETTINGS_FILE} not found, MCP config not created" >&2
+fi
 
 echo "✅ GitHub App MCP integration configured" >&2
 echo "   Token expires in ~1 hour" >&2
-echo "   MCP config: ${MCP_CONFIG_FILE}" >&2
+echo "   MCP config merged into: ${SETTINGS_FILE}" >&2
 
 # Branch protection (same as setup-git-pat.sh)
 git config --global receive.denyNonFastForwards true
@@ -233,7 +236,7 @@ for branch in "${protected_branches[@]}"; do
         echo "  1. Create a feature branch:  git checkout -b feature/my-changes"
         echo "  2. Make your changes and commit"
         echo "  3. Push the feature branch:  git push -u origin feature/my-changes"
-        echo "  4. Create a PR:              gh pr create"
+        echo "  4. Create a PR:              Use MCP create_pull_request tool"
         exit 1
     fi
 done
