@@ -38,7 +38,7 @@ fi
 
 # Default values
 GODOT_VERSION="${GODOT_VERSION:-4.6}"
-GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-beta1}"
+GODOT_RELEASE_TYPE="${GODOT_RELEASE_TYPE:-beta2}"
 
 log_info "Building Claude-Godot Agent image"
 echo ""

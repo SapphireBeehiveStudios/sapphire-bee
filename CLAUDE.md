@@ -215,18 +215,31 @@ make ci-build       # Build test only
 
 ### Skill: Building with Different Godot Versions
 
-Override the default Godot version:
+The default is Godot 4.6 beta2. To build with a different version:
 
 ```bash
-# Build with Godot 4.4
-make build GODOT_VERSION=4.4
+# Build with specific version and release type
+make build GODOT_VERSION=4.5 GODOT_RELEASE_TYPE=stable
 
 # Build with a release candidate
-make build GODOT_VERSION=4.4 GODOT_RELEASE_TYPE=rc1
+make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=rc1
 
 # Force rebuild without cache
-make build-no-cache GODOT_VERSION=4.3
+make build-no-cache GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
 ```
+
+**With SHA256 verification (recommended for production):**
+
+```bash
+# 1. Get the checksum for your specific version
+VERSION="4.6-beta2"
+curl -sL "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip" | sha256sum
+
+# 2. Build with verification
+GODOT_SHA256=<hash> make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
+```
+
+**Note:** `GODOT_SHA256` is version-specific. Each version/release combination has a different hash. If not set, verification is skipped (fine for development).
 
 ### Skill: Adding a New Allowed Domain
 

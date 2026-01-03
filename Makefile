@@ -13,7 +13,7 @@
 
 # Configuration (can be overridden: make build GODOT_VERSION=4.4)
 GODOT_VERSION ?= 4.6
-GODOT_RELEASE_TYPE ?= beta1
+GODOT_RELEASE_TYPE ?= beta2
 GODOT_SHA256 ?=
 PROJECT_PATH ?=
 STAGING_PATH ?=

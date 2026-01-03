@@ -25,7 +25,7 @@ on:
       godot_release_type:
         description: 'Release type (stable, beta1, rc1, etc.)'
         required: false
-        default: 'beta1'
+        default: 'beta2'
         type: string
       push_latest:
         description: 'Also tag as latest'
@@ -37,7 +37,7 @@ env:
   REGISTRY: ghcr.io
   # Godot configuration
   GODOT_VERSION: ${{ github.event.inputs.godot_version || '4.6' }}
-  GODOT_RELEASE_TYPE: ${{ github.event.inputs.godot_release_type || 'beta1' }}
+  GODOT_RELEASE_TYPE: ${{ github.event.inputs.godot_release_type || 'beta2' }}
 
 jobs:
   build-and-push:

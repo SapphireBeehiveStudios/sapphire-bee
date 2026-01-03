@@ -508,7 +508,7 @@ The build will proceed without checksum verification. SHA256 is optional but rec
 
 ```bash
 # Get checksum for the specific version you're building
-VERSION="4.6-beta1"  # Change to match your GODOT_VERSION-GODOT_RELEASE_TYPE
+VERSION="4.6-beta2"  # Change to match your GODOT_VERSION-GODOT_RELEASE_TYPE
 curl -LO "https://github.com/godotengine/godot/releases/download/${VERSION}/Godot_v${VERSION}_linux.x86_64.zip"
 sha256sum "Godot_v${VERSION}_linux.x86_64.zip"
 

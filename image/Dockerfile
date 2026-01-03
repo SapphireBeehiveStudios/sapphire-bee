@@ -4,7 +4,7 @@
 
 # Build arguments for version pinning
 ARG GODOT_VERSION=4.6
-ARG GODOT_RELEASE_TYPE=beta1
+ARG GODOT_RELEASE_TYPE=beta2
 # GODOT_SHA256 is optional - version-specific, skipped if not set
 ARG GODOT_SHA256
 
