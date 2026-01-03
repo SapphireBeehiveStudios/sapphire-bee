@@ -163,6 +163,22 @@ make claude P="Refactor the enemy.gd script to:
 3. Add chase behavior when player is near"
 ```
 
+#### Non-Interactive / Automation Mode
+
+For running from scripts, CI/CD, or other automation contexts:
+
+```bash
+# Print mode - outputs result without interactive prompts
+make claude-print P="Generate a list of all scene files"
+
+# Or use the script directly
+./scripts/claude-exec.sh --print "Your prompt here"
+```
+
+**TTY Auto-Detection**: The script automatically detects whether a terminal is attached and adjusts behavior:
+- With TTY: Uses `-it` flags for interactive mode
+- Without TTY: Runs non-interactively (safe for scripts and CI)
+
 ### Checking Status
 
 ```bash
@@ -429,6 +445,8 @@ git diff
 | Debugging an issue | **Persistent** | Iterative investigation |
 | Feature implementation | **Persistent** | Complex, needs guidance |
 | Code generation tasks | **Queue** | Well-defined, independent |
+| CI/CD integration | **Persistent + Print** | Use `make claude-print` for scripted execution |
+| Shell script automation | **Persistent + Print** | Non-interactive, TTY auto-detection |
 
 ### Can I Use Both?
 
@@ -634,6 +652,7 @@ make restart
 | `make up-agent PROJECT=...` | Start persistent agent |
 | `make claude` | Interactive session |
 | `make claude P="..."` | Single prompt |
+| `make claude-print P="..."` | Non-interactive batch mode |
 | `make agent-status` | Check if running |
 | `make claude-shell` | Open bash shell |
 | `make down-agent` | Stop agent |
@@ -654,6 +673,7 @@ make restart
 | Short | Full |
 |-------|------|
 | `make c` | `make claude` |
+| `make cp` | `make claude-print` |
 | `make a` | `make agent-status` |
 | `make q` | `make queue-status` |
 | `make qs` | `make queue-start` |

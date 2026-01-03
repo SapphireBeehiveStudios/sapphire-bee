@@ -136,6 +136,7 @@ make up-agent PROJECT=/path/to/your/godot/project
 # 6. Run Claude commands
 make claude                        # Interactive session
 make claude P="your prompt here"   # Single prompt
+make claude-print P="prompt"       # Non-interactive batch mode
 
 # 7. When done
 make down-agent
@@ -226,6 +227,7 @@ You can use either `make` targets or scripts directly:
 | `make up-agent PROJECT=...` | Start persistent agent container |
 | `make claude` | Interactive Claude session |
 | `make claude P="..."` | Single prompt execution |
+| `make claude-print P="..."` | Non-interactive batch mode (for scripts/CI) |
 | `make down-agent` | Stop persistent agent |
 | `make queue-start PROJECT=...` | Start async queue processor |
 | `make queue-add TASK="..." NAME=...` | Add task to queue |
@@ -269,6 +271,9 @@ make up-agent PROJECT=~/my-godot-game
 make claude P="What files are in this project?"
 make claude P="Add a jump mechanic to player.gd"
 make claude P="Fix the collision detection bug"
+
+# For automation/scripts, use print mode (no interactive prompts)
+make claude-print P="List all scene files"
 
 # For longer conversations, use interactive mode
 make claude

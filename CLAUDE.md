@@ -79,6 +79,7 @@ make up-agent PROJECT=/path/to/godot/project
 # Run Claude commands instantly (no startup delay)
 make claude                          # Interactive session
 make claude P="your prompt here"     # Single prompt
+make claude-print P="your prompt"    # Non-interactive batch mode (for scripts/CI)
 
 # Check agent status
 make agent-status
@@ -89,6 +90,28 @@ make claude-shell
 # Stop agent when done
 make down-agent
 ```
+
+### Skill: Non-Interactive / Automation Mode
+
+For running Claude from scripts, CI/CD pipelines, or other automation contexts:
+
+```bash
+# Print mode - outputs result without interactive prompts
+make claude-print P="List all .gd files in this project"
+
+# Or use the script directly with --print flag
+./scripts/claude-exec.sh --print "Generate a player script"
+
+# TTY auto-detection: the script automatically detects if a TTY is available
+# and adjusts behavior accordingly (no -it flags when running non-interactively)
+docker exec agent claude "prompt"  # Works without -it in scripts
+```
+
+**Key features for automation:**
+- `--print` flag outputs results without interactive prompts
+- TTY auto-detection removes `-it` flags when no terminal is attached
+- Claude Code permissions are pre-granted (no approval prompts needed)
+- Environment variables from `.env` are properly passed to the container
 
 ### Skill: Running Claude in the Sandbox (One-shot Mode)
 
@@ -447,6 +470,7 @@ godot-agent/
 | `make up-agent PROJECT=...` | Start persistent agent container |
 | `make claude` | Interactive Claude session |
 | `make claude P="..."` | Single prompt execution |
+| `make claude-print P="..."` | Non-interactive batch mode (for scripts/CI) |
 | `make agent-status` | Check if agent is running |
 | `make claude-shell` | Open bash shell in agent |
 | `make down-agent` | Stop persistent agent |
@@ -478,6 +502,7 @@ godot-agent/
 | `make s` | `make status` |
 | `make l` | `make logs` |
 | `make c` | `make claude` |
+| `make cp` | `make claude-print` |
 | `make a` | `make agent-status` |
 | `make q` | `make queue-status` |
 | `make qs` | `make queue-start` |
