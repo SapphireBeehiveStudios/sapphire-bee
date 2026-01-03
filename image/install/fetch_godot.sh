@@ -65,7 +65,12 @@ trap cleanup EXIT
 echo "=== Godot Headless/Server Binary Fetcher ==="
 echo "Version: ${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
 echo "Architecture: ${GODOT_ARCH} (detected: ${ARCH})"
+echo "Binary name: ${GODOT_BINARY_NAME}"
 echo "Install directory: ${INSTALL_DIR}"
+echo ""
+echo "Download URLs:"
+echo "  Primary:  ${GITHUB_URL}"
+echo "  Fallback: ${TUXFAMILY_URL}"
 echo ""
 
 # Check if checksum verification should be skipped
@@ -89,20 +94,26 @@ fi
 
 cd "$TEMP_DIR"
 
-# Download the binary - try TuxFamily first, then GitHub
+# Download the binary - try GitHub first, then TuxFamily as fallback
 download_success=false
 
 for url in "$GITHUB_URL" "$TUXFAMILY_URL"; do
     echo "Downloading Godot from: ${url}"
     if command -v curl &> /dev/null; then
-        if curl -fSL -o godot.zip "$url" 2>/dev/null; then
+        if curl -fSL --progress-bar -o godot.zip "$url"; then
             download_success=true
+            echo "Download successful!"
             break
+        else
+            echo "curl failed with exit code: $?"
         fi
     elif command -v wget &> /dev/null; then
-        if wget -O godot.zip "$url" 2>/dev/null; then
+        if wget -q --show-progress -O godot.zip "$url"; then
             download_success=true
+            echo "Download successful!"
             break
+        else
+            echo "wget failed with exit code: $?"
         fi
     else
         echo "ERROR: Neither curl nor wget available"
