@@ -124,9 +124,10 @@ async function processTask(filename) {
     
     return new Promise((resolve) => {
         // Spawn claude process
-        // Using --print flag for non-interactive mode if available
-        // Otherwise pass the prompt directly
-        const claude = spawn('claude', [content], {
+        // Use --print flag for non-interactive mode to avoid permission prompts
+        // This is necessary because Write/Edit tools request permission in non-interactive mode
+        // even with bypassPermissionsMode: true configured
+        const claude = spawn('claude', ['--print', content], {
             cwd: PROJECT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, TERM: 'dumb' }

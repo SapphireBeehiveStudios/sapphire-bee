@@ -8,7 +8,7 @@
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
-        up-agent down-agent claude claude-print claude-shell agent-status \
+        up-agent down-agent claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results
 
 # Default target
@@ -196,6 +196,10 @@ endif
 	@./$(SCRIPT_DIR)/claude-exec.sh --print "$(P)"
 
 claude-shell: ## Open bash shell in running agent
+	@./$(SCRIPT_DIR)/claude-exec.sh --shell
+
+verify-permissions: ## Verify Claude Code permissions configuration
+	@./$(SCRIPT_DIR)/verify-permissions.sh
 	@./$(SCRIPT_DIR)/claude-exec.sh --shell
 
 #==============================================================================
