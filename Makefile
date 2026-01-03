@@ -470,11 +470,17 @@ lint-scripts: ## Lint shell scripts with shellcheck
 		exit 1; \
 	fi
 
-install-hooks: ## Install git pre-commit hooks for secret scanning
+install-hooks: ## Install git pre-commit hooks for secret scanning and shellcheck
 	@echo "Installing git hooks..."
 	@git config core.hooksPath .githooks
 	@echo "✓ Git hooks installed from .githooks/"
-	@echo "  Pre-commit hook will scan for secrets before each commit."
+	@echo "  Pre-commit hook will:"
+	@echo "    - Scan for secrets before each commit"
+	@echo "    - Run shellcheck on shell scripts"
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+		echo ""; \
+		echo "⚠️  shellcheck not installed. Install with: brew install shellcheck"; \
+	fi
 
 #==============================================================================
 # CI/CD LOCAL TESTING (requires: brew install act)

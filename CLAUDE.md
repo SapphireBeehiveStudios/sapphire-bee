@@ -612,16 +612,20 @@ Types: `fix`, `feat`, `docs`, `ci`, `build`, `chore`, `refactor`
 
 ## Git Hooks
 
-Install pre-commit hooks to automatically scan for secrets:
+Install pre-commit hooks to automatically scan for secrets and lint shell scripts:
 ```bash
 make install-hooks
 ```
 
-This configures git to use `.githooks/pre-commit` which blocks commits containing:
-- Anthropic API keys (`sk-ant-...`)
-- Docker PATs (`dckr_pat_...`)
-- OAuth tokens in code
-- The `.env` file itself
+This configures git to use `.githooks/pre-commit` which:
+- Blocks commits containing secrets:
+  - Anthropic API keys (`sk-ant-...`)
+  - Docker PATs (`dckr_pat_...`)
+  - OAuth tokens in code
+  - The `.env` file itself
+- Runs `shellcheck` on staged shell scripts (`.sh`, `.bash` files)
+  - Requires `shellcheck` to be installed: `brew install shellcheck`
+  - If not installed, the hook will warn but not block commits
 
 ## Common Issues
 

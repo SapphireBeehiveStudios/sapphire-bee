@@ -1,0 +1,25 @@
+{
+  // Shellcheck configuration for Cursor/VS Code
+  // Requires: timonwong.shellcheck extension
+  "shellcheck.enable": true,
+  "shellcheck.run": "onSave",
+  "shellcheck.executablePath": "shellcheck",
+  "shellcheck.customArgs": [],
+  "shellcheck.exclude": [],
+  
+  // File associations for shell scripts
+  "files.associations": {
+    "*.sh": "shellscript",
+    "*.bash": "shellscript"
+  },
+  
+  // Editor settings for shell scripts
+  "[shellscript]": {
+    "editor.defaultFormatter": "timonwong.shellcheck",
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.shellcheck": "explicit"
+    }
+  }
+}
+
