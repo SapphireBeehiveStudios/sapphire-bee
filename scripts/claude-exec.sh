@@ -149,6 +149,10 @@ if [[ "$PRINT_MODE" == "true" ]]; then
     CLAUDE_ARGS="--print"
 fi
 
+# Add permission bypass flag for sandbox safety
+# This is safe because security is enforced by container isolation, not permissions
+CLAUDE_ARGS="$CLAUDE_ARGS --dangerously-skip-permissions"
+
 if [[ "$OPEN_SHELL" == "true" ]]; then
     # Open bash shell (no logging for shell sessions)
     log_info "Opening bash shell in agent container..."
