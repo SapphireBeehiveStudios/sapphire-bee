@@ -193,9 +193,12 @@ This shows which authentication method is configured and ready to use.
 To enable Claude to clone, commit, push, and manage issues/PRs, add a GitHub Personal Access Token:
 
 ```bash
-# Create a GitHub PAT at: https://github.com/settings/tokens
-# Add to .env file
-echo 'GITHUB_PAT=ghp_...' >> .env
+# Create a PAT with the right permissions for your repo
+make github-pat REPO=owner/repo
+
+# Or manually at: https://github.com/settings/tokens
+# Then add to .env file
+echo 'GITHUB_PAT=github_pat_...' >> .env
 ```
 
 **Required PAT Permissions:**

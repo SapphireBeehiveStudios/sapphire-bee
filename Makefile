@@ -81,6 +81,13 @@ auth-status: ## Check Claude authentication status
 auth-setup-token: ## Generate Claude Max OAuth token
 	@./$(SCRIPT_DIR)/setup-claude-auth.sh setup-token
 
+github-pat: ## Create GitHub PAT for a repository (usage: make github-pat REPO=owner/repo)
+	@if [ -z "$(REPO)" ]; then \
+		echo "Usage: make github-pat REPO=owner/repo"; \
+		exit 1; \
+	fi
+	@./$(SCRIPT_DIR)/create-github-pat.sh $(REPO)
+
 build: ## Build the agent container image
 	@GODOT_VERSION=$(GODOT_VERSION) \
 	 GODOT_RELEASE_TYPE=$(GODOT_RELEASE_TYPE) \
