@@ -13,17 +13,12 @@ on:
   workflow_dispatch:
     inputs:
       godot_version:
-        description: 'Godot version to build'
+        description: 'Godot version (e.g., 4.6, 4.5.1, 4.4)'
         required: false
         default: '4.6'
-        type: choice
-        options:
-          - '4.6'
-          - '4.5'
-          - '4.4'
-          - '4.3'
+        type: string
       godot_release_type:
-        description: 'Release type (stable, beta1, beta2, rc1, etc.)'
+        description: 'Release type (stable, beta1, beta2, rc1, dev1, etc.)'
         required: false
         default: 'beta2'
         type: string
