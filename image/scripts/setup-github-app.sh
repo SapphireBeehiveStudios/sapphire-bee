@@ -253,7 +253,7 @@ for branch in "${protected_branches[@]}"; do
         echo "  1. Create a feature branch:  git checkout -b feature/my-changes"
         echo "  2. Make your changes and commit"
         echo "  3. Push the feature branch:  git push -u origin feature/my-changes"
-        echo "  4. Create a PR:              gh pr create"
+        echo "  4. Create a PR:              Use MCP create_pull_request tool"
         exit 1
     fi
 done

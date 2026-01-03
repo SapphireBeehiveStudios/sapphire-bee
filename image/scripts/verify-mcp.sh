@@ -211,24 +211,7 @@ check_repo_access() {
     esac
 }
 
-# Check 4: Environment variables are exported (for gh CLI)
-check_env_vars() {
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        log_ok "GITHUB_TOKEN environment variable is set"
-    else
-        log_warn "GITHUB_TOKEN not set in environment (gh CLI may not work)"
-    fi
-    
-    if [[ -n "${GH_TOKEN:-}" ]]; then
-        log_ok "GH_TOKEN environment variable is set"
-    else
-        log_warn "GH_TOKEN not set in environment (gh CLI may not work)"
-    fi
-    
-    return 0
-}
-
-# Check 5: MCP server can be started (optional, heavier check)
+# Check 4: MCP server can be started (optional, heavier check)
 check_mcp_server_startup() {
     if [[ "$VERBOSE" != "1" ]]; then
         return 0
@@ -286,7 +269,6 @@ main() {
         fi
     fi
     
-    check_env_vars
     check_mcp_server_startup
     
     echo ""

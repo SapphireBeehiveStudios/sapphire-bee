@@ -772,7 +772,7 @@ git log --oneline -5
 
 ### Creating PRs
 
-Use the MCP `create_pull_request` tool rather than `gh pr create`:
+Use the MCP `create_pull_request` tool:
 
 ```
 Use create_pull_request:
@@ -977,8 +977,7 @@ GITHUB_VERIFY_REPO=owner/repo /opt/scripts/verify-mcp.sh
 The script checks:
 - ✓ MCP configuration exists in settings.json
 - ✓ GitHub token is present and valid
-- ✓ Token has correct permissions
-- ✓ Environment variables are set for gh CLI
+- ✓ Token has correct permissions for target repository
 
 ### MCP Tools Not Available
 
@@ -996,11 +995,10 @@ If MCP tools aren't working:
    curl -H "Authorization: Bearer $TOKEN" https://api.github.com/rate_limit
    ```
 
-3. **Fallback to gh CLI with explicit token:**
-   ```bash
-   TOKEN=$(cat ~/.claude/settings.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
-   GH_TOKEN=$TOKEN gh pr create --title "..." --body "..."
-   ```
+3. **If token is missing or expired:**
+   - Check container was started with correct GitHub App credentials
+   - Verify `GITHUB_APP_ID` and `GITHUB_APP_INSTALLATION_ID` are set
+   - Restart container to regenerate token (tokens expire after ~1 hour)
 
 ### MCP Tool Failures
 

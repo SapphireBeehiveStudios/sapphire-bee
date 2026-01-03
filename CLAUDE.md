@@ -59,7 +59,7 @@ git push            # ⚠️ Use MCP push_files if git push fails
 - [Pre-built Image](#pre-built-image)
 - [Skills](#skills)
   - [First-Time Setup](#skill-first-time-setup)
-  - [Using GitHub PAT](#skill-using-github-personal-access-token)
+  - [GitHub Authentication](#skill-github-authentication)
   - [Persistent Mode (Recommended)](#skill-running-claude-in-the-sandbox-persistent-mode---recommended)
   - [Non-Interactive / Automation](#skill-non-interactive--automation-mode)
   - [One-shot Mode](#skill-running-claude-in-the-sandbox-one-shot-mode)
@@ -143,37 +143,27 @@ make build
 make up
 ```
 
-### Skill: Using GitHub Personal Access Token
+### Skill: GitHub Authentication
 
-To enable Claude to clone, commit, and push to GitHub repositories:
+#### Host-Side (Outside Container)
+
+On your host machine, use `gh` CLI with your personal authentication:
 
 ```bash
-# 1. Create a GitHub PAT at: https://github.com/settings/tokens
+# Authenticate gh CLI (one-time)
+gh auth login
 
-# 2. Add PAT to .env file
-echo 'GITHUB_PAT=ghp_...' >> .env
-
-# 3. Git and gh CLI are automatically configured when container starts
+# Then use normally
+gh issue list
+gh pr create --title "Fix" --body "Details"
+gh release create v1.0.0
 ```
 
-**Required PAT Permissions:**
+#### Sandboxed Agent (Inside Container) - MCP Only
 
-For **Classic tokens**:
-- `repo` - Full access (private repos, issues, PRs, releases)
-- `public_repo` - Public repos only (if you don't need private repo access)
+**⚠️ The sandboxed agent uses MCP tools exclusively for GitHub operations.**
 
-For **Fine-grained tokens** (recommended - more secure):
-- **Repository access**: Select specific repos or "All repositories"
-- **Contents**: Read and write (git clone/push)
-- **Issues**: Read and write (gh issue commands)
-- **Pull requests**: Read and write (gh pr commands)
-- **Metadata**: Read (required for all operations)
-
-**Inside the container - Two Options:**
-
-#### Option 1: MCP Tools (Recommended for Sandboxed Agents)
-
-When running as an autonomous agent, use MCP tools for GitHub API operations:
+No `gh` CLI. No PAT. MCP tools are pre-authenticated via GitHub App.
 
 ```
 # List issues
@@ -187,61 +177,45 @@ Use create_pull_request with owner, repo, title, body, head, base
 
 # Comment on issue (to claim it)
 Use create_issue_comment with owner, repo, issue_number, body
+
+# Read remote files
+Use get_file_contents with owner, repo, path
+
+# Push changes
+Use push_files with owner, repo, branch, files, message
 ```
 
-**Why MCP tools?** They're pre-authenticated via GitHub App and work reliably in the sandbox.
+**Why MCP only?**
+- Pre-authenticated via GitHub App (no token management)
+- Installation tokens auto-refresh (~1 hour expiry)
+- No credential leakage risk
+- Consistent behavior across all sandbox modes
 
-#### Option 2: Git + gh CLI (When PAT is Configured)
-
-If `GITHUB_PAT` is set in `.env`, git and `gh` CLI also work:
-
+**Git CLI is fine for local operations:**
 ```bash
-# Clone a repository using the helper script
-/opt/scripts/clone-repo.sh owner/repo
-# Or specify target directory:
-/opt/scripts/clone-repo.sh owner/repo /project/my-repo
-
-# Or use git directly (PAT is already configured)
-git clone https://github.com/owner/repo.git
-cd repo
-# ... make changes ...
-git add .
-git commit -m "Changes made by Claude"
-git push
-
-# GitHub CLI (gh) for repo management (HOST-SIDE or when PAT configured):
-gh issue list                                   # List issues
-gh issue create --title "Bug" --body "Details"  # Create issue
-gh issue close 123                              # Close issue
-gh pr create --title "Fix" --body "Details"     # Create PR
-gh pr list                                      # List PRs
-gh pr merge 123                                 # Merge PR
-gh release create v1.0.0                        # Create release
+git status          # ✅ OK
+git add .           # ✅ OK  
+git commit -m "..."  # ✅ OK
+git checkout -b ...  # ✅ OK
+git log             # ✅ OK
+# For remote operations (push, PR) → use MCP tools
 ```
-
-> **Note for Sandboxed Agents:** If `gh` commands fail with auth errors, fall back to MCP tools. MCP tools are always available; `gh` depends on PAT configuration.
-
-**Security Notes:**
-- PAT grants full repository access - use minimal required scopes
-- PAT is stored in `.env` (gitignored, not committed)
-- Git credentials are stored in tmpfs (temporary, cleared on container stop)
-- PAT is not exposed in process lists or URLs (uses credential helper)
 
 **Branch Protection (enabled automatically):**
 - ⛔ Direct pushes to `main`/`master` are **blocked** by pre-push hook
 - ✅ Clone script automatically creates a `claude/work-*` branch
 - ✅ Force pushes and branch deletions are disabled
-- Use `gh pr create` to merge changes via pull request
+- Use MCP `create_pull_request` to merge changes
 
-**Manual git configuration (if needed):**
+**GitHub App Setup (Required for Sandbox):**
 ```bash
-# Source the setup script manually
-source /opt/scripts/setup-git-pat.sh
-
-# Or configure git user info
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
+# Set in .env file:
+GITHUB_APP_ID=your_app_id
+GITHUB_APP_INSTALLATION_ID=your_installation_id
+GITHUB_APP_PRIVATE_KEY_PATH=/secrets/your-app.private-key.pem
 ```
+
+See `docs/GITHUB_APP_SETUP.md` for full GitHub App configuration.
 
 ### Skill: Running Claude in the Sandbox (Persistent Mode - Recommended)
 
