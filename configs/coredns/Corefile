@@ -2,33 +2,24 @@
 # Implements DNS allowlisting: returns proxy IPs for allowed domains,
 # NXDOMAIN for everything else.
 
-# Main zone - handles all queries
-. {
-    # Enable query logging for observability
-    # All queries (allowed and blocked) are logged
+# Allowlisted domains - return proxy IPs from hosts file
+github.com. www.github.com. raw.githubusercontent.com. codeload.github.com. docs.godotengine.org. api.anthropic.com. {
     log {
         class all
     }
-    
-    # Error logging
     errors
-    
-    # Health check endpoint
+    hosts /etc/coredns/hosts.allowlist
+}
+
+# Everything else - return NXDOMAIN (block)
+. {
+    log {
+        class all
+    }
+    errors
     health :8080
-    
-    # Ready check endpoint  
     ready :8181
     
-    # Prometheus metrics (optional, useful for monitoring)
-    # prometheus :9153
-    
-    # Load hosts file for allowlist mappings
-    hosts /etc/coredns/hosts.allowlist {
-        fallthrough
-    }
-    
-    # Template for NXDOMAIN responses (blocks everything not in allowlist)
-    # This catches any query that didn't match the hosts file
     template IN A {
         rcode NXDOMAIN
     }
@@ -37,7 +28,5 @@
         rcode NXDOMAIN
     }
     
-    # Cache responses (helps with performance)
     cache 60
 }
-

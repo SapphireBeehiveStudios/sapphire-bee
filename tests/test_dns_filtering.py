@@ -7,9 +7,31 @@ Verifies that:
 - DNS queries are properly logged
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
-from conftest import DockerComposeStack
+if TYPE_CHECKING:
+    from conftest import DockerComposeStack
+
+
+def dns_lookup_cmd(domain: str, dns_server: str = "10.100.1.2") -> str:
+    """Generate a Node.js command for DNS lookup (since nslookup isn't available)."""
+    return f"""node -e "
+const dns = require('dns');
+const r = new dns.Resolver();
+r.setServers(['{dns_server}']);
+r.resolve4('{domain}', (err, addresses) => {{
+  if (err) {{
+    console.log('NXDOMAIN:' + err.code);
+    process.exit(1);
+  }} else {{
+    console.log('RESOLVED:' + addresses.join(','));
+  }}
+}});
+" 2>&1"""
 
 
 class TestDNSAllowedDomains:
@@ -33,31 +55,14 @@ class TestDNSAllowedDomains:
         expected_ip: str,
     ) -> None:
         """Verify that allowlisted domains resolve to their proxy IPs."""
-        # Use nslookup to check DNS resolution
         result = sandbox_stack.exec_in_container(
             "agent",
-            f"nslookup {domain}",
+            dns_lookup_cmd(domain),
         )
         
-        # The output should contain the expected proxy IP
-        assert expected_ip in result.output, (
+        assert f"RESOLVED:{expected_ip}" in result.output, (
             f"Expected {domain} to resolve to {expected_ip}, "
             f"got: {result.output}"
-        )
-    
-    def test_github_resolves_via_dig(
-        self,
-        sandbox_stack: DockerComposeStack,
-    ) -> None:
-        """Alternative test using dig command if available."""
-        result = sandbox_stack.exec_in_container(
-            "agent",
-            "dig +short github.com @10.100.1.2 2>/dev/null || nslookup github.com | grep -A1 'Name:'",
-        )
-        
-        # Should contain the proxy IP
-        assert "10.100.1.10" in result.output or result.exit_code != 0, (
-            f"Expected github.com to resolve to 10.100.1.10, got: {result.output}"
         )
 
 
@@ -84,20 +89,11 @@ class TestDNSBlockedDomains:
         """Verify that non-allowlisted domains return NXDOMAIN."""
         result = sandbox_stack.exec_in_container(
             "agent",
-            f"nslookup {domain} 2>&1",
+            dns_lookup_cmd(domain),
         )
         
         # Should indicate the domain was not found
-        output_lower = result.output.lower()
-        assert any(indicator in output_lower for indicator in [
-            "nxdomain",
-            "can't find",
-            "server can't find",
-            "name or service not known",
-            "non-existent",
-            "** server can't find",
-            "no answer",
-        ]), (
+        assert "NXDOMAIN" in result.output, (
             f"Expected {domain} to return NXDOMAIN, got: {result.output}"
         )
     
@@ -127,10 +123,10 @@ class TestDNSSubdomains:
         """Test that www.github.com (explicitly allowed) works."""
         result = sandbox_stack.exec_in_container(
             "agent",
-            "nslookup www.github.com",
+            dns_lookup_cmd("www.github.com"),
         )
         
-        assert "10.100.1.10" in result.output, (
+        assert "RESOLVED:10.100.1.10" in result.output, (
             f"Expected www.github.com to resolve to 10.100.1.10, got: {result.output}"
         )
     
@@ -142,16 +138,10 @@ class TestDNSSubdomains:
         # gist.github.com is not in the allowlist
         result = sandbox_stack.exec_in_container(
             "agent",
-            "nslookup gist.github.com 2>&1",
+            dns_lookup_cmd("gist.github.com"),
         )
         
-        output_lower = result.output.lower()
-        assert any(indicator in output_lower for indicator in [
-            "nxdomain",
-            "can't find",
-            "server can't find",
-            "non-existent",
-        ]), (
+        assert "NXDOMAIN" in result.output, (
             f"Expected gist.github.com to be blocked, got: {result.output}"
         )
 
@@ -164,28 +154,30 @@ class TestDNSConfiguration:
         sandbox_stack: DockerComposeStack,
     ) -> None:
         """Verify agent is configured to use dnsfilter (10.100.1.2)."""
+        # Check Docker's DNS config points to dnsfilter
         result = sandbox_stack.exec_in_container(
             "agent",
             "cat /etc/resolv.conf",
         )
         
+        # Docker's internal DNS (127.0.0.11) forwards to 10.100.1.2
+        # Check that ExtServers includes our dnsfilter
         assert "10.100.1.2" in result.output, (
-            f"Expected DNS to be 10.100.1.2, got: {result.output}"
+            f"Expected DNS config to reference 10.100.1.2, got: {result.output}"
         )
     
-    def test_dnsfilter_health_endpoint(
+    def test_dnsfilter_reachable(
         self,
         sandbox_stack: DockerComposeStack,
     ) -> None:
-        """Verify dnsfilter health endpoint is accessible."""
+        """Verify dnsfilter is reachable from agent."""
         result = sandbox_stack.exec_in_container(
             "agent",
-            "wget -q -O - http://10.100.1.2:8080/health 2>&1 || curl -s http://10.100.1.2:8080/health 2>&1",
+            "timeout 2 bash -c '</dev/tcp/10.100.1.2/53' && echo 'DNS_PORT_OPEN' || echo 'DNS_PORT_CLOSED'",
         )
         
-        # Health check should return OK or similar
-        assert result.success or "OK" in result.output.upper(), (
-            f"DNS health check failed: {result.output}"
+        assert "DNS_PORT_OPEN" in result.output, (
+            f"Expected DNS port 53 to be open, got: {result.output}"
         )
 
 
@@ -197,10 +189,10 @@ class TestDNSLogging:
         sandbox_stack: DockerComposeStack,
     ) -> None:
         """Verify DNS queries appear in dnsfilter logs."""
-        # Make a DNS query
+        # Make a DNS query for a unique domain
         sandbox_stack.exec_in_container(
             "agent",
-            "nslookup unique-test-domain-12345.com 2>&1 || true",
+            dns_lookup_cmd("unique-test-domain-12345.com"),
         )
         
         # Check dnsfilter logs
@@ -219,7 +211,7 @@ class TestDNSLogging:
         # Make an allowed query
         sandbox_stack.exec_in_container(
             "agent",
-            "nslookup github.com",
+            dns_lookup_cmd("github.com"),
         )
         
         # Check logs exist (CoreDNS logs all queries)
@@ -227,4 +219,3 @@ class TestDNSLogging:
         
         # Should have some content if logging is enabled
         assert len(logs) > 0, "Expected dnsfilter to have logs"
-

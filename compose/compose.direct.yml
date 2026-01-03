@@ -60,7 +60,7 @@ services:
     # Depends on infrastructure services
     depends_on:
       dnsfilter:
-        condition: service_healthy
+        condition: service_started  # CoreDNS has no healthcheck (distroless image)
       proxy_github:
         condition: service_started
       proxy_anthropic_api:

@@ -7,9 +7,14 @@ Verifies that:
 - Mount permissions are correct
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
-from conftest import DockerComposeStack
+if TYPE_CHECKING:
+    from conftest import DockerComposeStack
 
 
 class TestMountedVolumes:

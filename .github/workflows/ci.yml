@@ -143,6 +143,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker compose -p security-test -f compose/compose.base.yml -f compose/compose.direct.yml down -v --remove-orphans || true
-          docker compose -p security-test-offline -f compose/compose.offline.yml down -v --remove-orphans || true
+          cd compose
+          docker compose -f compose.base.yml -f compose.direct.yml down -v --remove-orphans || true
+          docker compose -f compose.offline.yml down -v --remove-orphans || true
 

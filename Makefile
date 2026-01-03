@@ -231,52 +231,62 @@ test: doctor validate ## Run all checks (not security tests)
 # SECURITY TESTS
 #==============================================================================
 
-install-tests: ## Install test dependencies (requires uv)
+# Virtual environment for tests
+VENV := .venv
+VENV_PYTHON := $(VENV)/bin/python
+VENV_PYTEST := $(VENV)/bin/pytest
+
+install-tests: $(VENV) ## Install test dependencies (requires uv)
+
+$(VENV): tests/requirements.txt
 	@if ! command -v uv >/dev/null 2>&1; then \
 		echo "Error: uv is not installed"; \
 		echo "Install with: brew install uv"; \
 		exit 1; \
 	fi
+	@echo "Creating virtual environment..."
+	@uv venv $(VENV)
 	@echo "Installing test dependencies..."
-	@uv pip install --system -r tests/requirements.txt
-	@echo "✓ Test dependencies installed"
+	@uv pip install -p $(VENV_PYTHON) -r tests/requirements.txt
+	@touch $(VENV)
+	@echo "✓ Test dependencies installed in $(VENV)"
 
-test-security: _check-docker build ## Run all security tests
+test-security: _check-tests build ## Run all security tests
 	@echo "Running security tests..."
-	@cd tests && python3 -m pytest -v --tb=short
+	@cd tests && ../$(VENV_PYTEST) -v --tb=short
 
-test-security-parallel: _check-docker build ## Run security tests in parallel
+test-security-parallel: _check-tests build ## Run security tests in parallel
 	@echo "Running security tests in parallel..."
-	@cd tests && python3 -m pytest -v --tb=short -n auto
+	@cd tests && ../$(VENV_PYTEST) -v --tb=short -n auto
 
-test-dns: _check-docker ## Run DNS filtering tests only
+test-dns: _check-tests ## Run DNS filtering tests only
 	@echo "Running DNS filtering tests..."
-	@cd tests && python3 -m pytest test_dns_filtering.py -v
+	@cd tests && ../$(VENV_PYTEST) test_dns_filtering.py -v
 
-test-network: _check-docker ## Run network restriction tests only
+test-network: _check-tests ## Run network restriction tests only
 	@echo "Running network restriction tests..."
-	@cd tests && python3 -m pytest test_network_restrictions.py -v
+	@cd tests && ../$(VENV_PYTEST) test_network_restrictions.py -v
 
-test-hardening: _check-docker ## Run container hardening tests only
+test-hardening: _check-tests ## Run container hardening tests only
 	@echo "Running container hardening tests..."
-	@cd tests && python3 -m pytest test_container_hardening.py -v
+	@cd tests && ../$(VENV_PYTEST) test_container_hardening.py -v
 
-test-filesystem: _check-docker ## Run filesystem restriction tests only
+test-filesystem: _check-tests ## Run filesystem restriction tests only
 	@echo "Running filesystem restriction tests..."
-	@cd tests && python3 -m pytest test_filesystem_restrictions.py -v
+	@cd tests && ../$(VENV_PYTEST) test_filesystem_restrictions.py -v
 
-test-offline: _check-docker ## Run offline mode tests only
+test-offline: _check-tests ## Run offline mode tests only
 	@echo "Running offline mode tests..."
-	@cd tests && python3 -m pytest test_offline_mode.py -v
+	@cd tests && ../$(VENV_PYTEST) test_offline_mode.py -v
 
-_check-docker:
+_check-tests:
 	@if ! docker info >/dev/null 2>&1; then \
 		echo "Error: Docker is not running"; \
 		exit 1; \
 	fi
-	@if ! python3 -c "import pytest" 2>/dev/null; then \
-		echo "Error: pytest not installed"; \
-		echo "Install with: make install-tests"; \
+	@if [ ! -f "$(VENV_PYTEST)" ]; then \
+		echo "Error: Test environment not set up"; \
+		echo "Run: make install-tests"; \
 		exit 1; \
 	fi
 

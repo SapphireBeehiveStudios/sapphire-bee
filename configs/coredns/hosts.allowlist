@@ -5,7 +5,6 @@
 # The proxy containers handle the actual connection to the internet
 
 # GitHub (code hosting, git operations)
-# proxy_github container IP (will be resolved by Docker DNS)
 10.100.1.10 github.com
 10.100.1.10 www.github.com
 
@@ -23,4 +22,4 @@
 
 # Note: These IPs are static assignments within the sandbox_net
 # They must match the ipv4_address settings in compose.base.yml
-
+# Also: Domains must be listed in the Corefile server block

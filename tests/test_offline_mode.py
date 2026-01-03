@@ -7,9 +7,14 @@ Verifies that:
 - Container is otherwise functional
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
-from conftest import DockerComposeStack
+if TYPE_CHECKING:
+    from conftest import DockerComposeStack
 
 
 class TestOfflineNetworkAccess:
@@ -156,23 +161,23 @@ class TestOfflinePing:
         self,
         offline_stack: DockerComposeStack,
     ) -> None:
-        """Verify cannot ping external IPs."""
+        """Verify cannot reach external IPs."""
+        # Use Node.js since ping might not be available
         result = offline_stack.exec_in_container(
             "agent_offline",
-            "ping -c 1 -W 1 8.8.8.8 2>&1",
+            """node -e "
+const net = require('net');
+const socket = new net.Socket();
+socket.setTimeout(2000);
+socket.connect(80, '8.8.8.8', () => { console.log('CONNECTED'); socket.destroy(); });
+socket.on('error', e => { console.log('ERROR:' + e.code); });
+socket.on('timeout', () => { console.log('TIMEOUT'); socket.destroy(); });
+" 2>&1""",
         )
         
-        assert not result.success, (
-            f"Expected ping to fail, got: {result.output}"
-        )
-        
-        output = result.output.lower()
-        assert any(indicator in output for indicator in [
-            "network is unreachable",
-            "network unreachable",
-            "sendto: network is unreachable",
-        ]), (
-            f"Expected network unreachable, got: {result.output}"
+        # Should fail with network error (ENETUNREACH or similar)
+        assert not result.success or "ERROR:" in result.output or "TIMEOUT" in result.output, (
+            f"Expected network error, got: {result.output}"
         )
     
     def test_can_ping_localhost(

@@ -35,14 +35,16 @@ class ExecResult:
 class DockerComposeStack:
     """Manages a Docker Compose stack for testing."""
     
-    def __init__(self, compose_files: list[str], project_name: str = "security-test"):
+    def __init__(self, compose_files: list[str], project_name: str | None = None):
         self.compose_files = compose_files
-        self.project_name = project_name
+        self.project_name = project_name  # None = use compose file's project name
         self.client = docker.from_env()
     
     def _compose_cmd(self, *args: str) -> list[str]:
         """Build docker compose command with project name and files."""
-        cmd = ["docker", "compose", "-p", self.project_name]
+        cmd = ["docker", "compose"]
+        if self.project_name:
+            cmd.extend(["-p", self.project_name])
         for f in self.compose_files:
             cmd.extend(["-f", str(COMPOSE_DIR / f)])
         cmd.extend(args)
@@ -57,18 +59,57 @@ class DockerComposeStack:
         env = os.environ.copy()
         env["PROJECT_PATH"] = str(project_dir)
         
+        # For sandbox stack, we need to start base first to create networks,
+        # then start the full stack
+        if len(self.compose_files) > 1 and "compose.base.yml" in self.compose_files:
+            # Start base services first to create networks
+            base_cmd = ["docker", "compose"]
+            base_cmd.extend(["-f", str(COMPOSE_DIR / "compose.base.yml")])
+            base_cmd.extend(["up", "-d"])
+            
+            result = subprocess.run(
+                base_cmd,
+                env=env,
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                error_msg = f"Base compose failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+                raise subprocess.CalledProcessError(
+                    result.returncode,
+                    result.args,
+                    output=error_msg,
+                    stderr=result.stderr,
+                )
+            
+            # Wait for base services to fully start
+            time.sleep(3)
+        
+        # Build compose command for full stack
+        # Note: Don't use --wait because dnsfilter has no healthcheck
+        args = ["up", "-d"]
+        
         # Start services
-        subprocess.run(
-            self._compose_cmd("up", "-d", "--wait" if wait_for_healthy else ""),
-            check=True,
+        result = subprocess.run(
+            self._compose_cmd(*args),
             env=env,
             cwd=PROJECT_ROOT,
             capture_output=True,
+            text=True,
         )
         
-        # Additional wait for services to stabilize
-        if wait_for_healthy:
-            time.sleep(3)
+        if result.returncode != 0:
+            error_msg = f"Compose up failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+            raise subprocess.CalledProcessError(
+                result.returncode,
+                result.args,
+                output=error_msg,
+                stderr=result.stderr,
+            )
+        
+        # Wait for services to stabilize (since we can't use --wait with dnsfilter)
+        time.sleep(5 if wait_for_healthy else 2)
     
     def down(self, volumes: bool = True) -> None:
         """Stop and remove the compose stack."""
@@ -85,15 +126,17 @@ class DockerComposeStack:
     
     def get_container(self, name: str) -> Optional[docker.models.containers.Container]:
         """Get a container by name."""
-        full_name = f"{self.project_name}-{name}-1"
+        # Compose files use container_name, so try that first
         try:
-            return self.client.containers.get(full_name)
+            return self.client.containers.get(name)
         except docker.errors.NotFound:
-            # Try without project prefix
-            try:
-                return self.client.containers.get(name)
-            except docker.errors.NotFound:
-                return None
+            # Try with project prefix if project_name is set
+            if self.project_name:
+                try:
+                    return self.client.containers.get(f"{self.project_name}-{name}-1")
+                except docker.errors.NotFound:
+                    pass
+            return None
     
     def exec_in_container(
         self,
@@ -148,7 +191,7 @@ def sandbox_stack() -> Generator[DockerComposeStack, None, None]:
     """
     stack = DockerComposeStack(
         compose_files=["compose.base.yml", "compose.direct.yml"],
-        project_name="security-test",
+        # Use compose file's project name (claude-godot-sandbox)
     )
     
     # Ensure clean state
@@ -168,9 +211,15 @@ def offline_stack() -> Generator[DockerComposeStack, None, None]:
     
     This starts only the agent container with network_mode: none.
     """
+    # First ensure the main stack is down to free up container names
+    main_stack = DockerComposeStack(
+        compose_files=["compose.base.yml", "compose.direct.yml"],
+    )
+    main_stack.down()
+    
     stack = DockerComposeStack(
         compose_files=["compose.offline.yml"],
-        project_name="security-test-offline",
+        # Use compose file's project name
     )
     
     # Ensure clean state
