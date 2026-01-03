@@ -8,7 +8,7 @@
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
-        up-agent down-agent claude claude-shell agent-status \
+        up-agent down-agent claude claude-print claude-shell agent-status \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results
 
 # Default target
@@ -48,6 +48,7 @@ help: ## Show this help message
 	@echo "  make up-agent PROJECT=~/game   # Start persistent agent"
 	@echo "  make claude                    # Interactive Claude session"
 	@echo "  make claude P=\"your prompt\"    # Single prompt"
+	@echo "  make claude-print P=\"prompt\"   # Non-interactive batch mode"
 	@echo "  make down-agent                # Stop when done"
 	@echo ""
 	@echo "$(GREEN)Quick Start (One-shot Mode):$(RESET)"
@@ -156,7 +157,7 @@ up-agent: _check-project _check-auth ## Start persistent agent container (PROJEC
 	@echo ""
 	@echo "Starting persistent agent container..."
 	@cd $(COMPOSE_DIR) && PROJECT_PATH=$(PROJECT_PATH) \
-		docker compose -f compose.base.yml -f compose.persistent.yml up -d agent
+		docker compose --env-file ../.env -f compose.base.yml -f compose.persistent.yml up -d agent
 	@echo ""
 	@echo "Agent is running! Use these commands:"
 	@echo "  make claude              - Start interactive Claude session"
@@ -166,7 +167,7 @@ up-agent: _check-project _check-auth ## Start persistent agent container (PROJEC
 
 down-agent: ## Stop persistent agent container
 	@echo "Stopping agent container..."
-	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.persistent.yml down
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.persistent.yml down
 	@echo "Agent stopped."
 
 agent-status: ## Show persistent agent status
@@ -185,6 +186,14 @@ ifdef P
 else
 	@./$(SCRIPT_DIR)/claude-exec.sh
 endif
+
+claude-print: ## Run Claude in print mode for automation (P="prompt" required)
+ifndef P
+	@echo "Error: P (prompt) is required for print mode"
+	@echo "Usage: make claude-print P=\"your prompt\""
+	@exit 1
+endif
+	@./$(SCRIPT_DIR)/claude-exec.sh --print "$(P)"
 
 claude-shell: ## Open bash shell in running agent
 	@./$(SCRIPT_DIR)/claude-exec.sh --shell
@@ -205,7 +214,7 @@ queue-start: _check-project _check-auth ## Start queue processor daemon (PROJECT
 	@echo ""
 	@echo "Starting queue processor daemon..."
 	@cd $(COMPOSE_DIR) && PROJECT_PATH=$(PROJECT_PATH) \
-		docker compose -f compose.base.yml -f compose.queue.yml up -d agent
+		docker compose --env-file ../.env -f compose.base.yml -f compose.queue.yml up -d agent
 	@echo ""
 	@echo "Queue processor running!"
 	@echo ""
@@ -219,7 +228,7 @@ queue-start: _check-project _check-auth ## Start queue processor daemon (PROJECT
 
 queue-stop: ## Stop queue processor daemon
 	@echo "Stopping queue processor..."
-	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml down
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.queue.yml down
 	@echo "Queue processor stopped."
 
 queue-status: _check-project ## Show queue status (PROJECT=/path)
@@ -250,7 +259,7 @@ queue-status: _check-project ## Show queue status (PROJECT=/path)
 	fi
 
 queue-logs: ## Follow queue processor logs
-	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml -f compose.queue.yml logs -f agent
+	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.queue.yml logs -f agent
 
 queue-add: _check-project ## Add task to queue (TASK="prompt" NAME=001-name PROJECT=/path)
 ifndef TASK
@@ -558,6 +567,7 @@ s: status
 l: logs
 r: logs-report
 c: claude
+cp: claude-print
 a: agent-status
 q: queue-status
 qs: queue-start
