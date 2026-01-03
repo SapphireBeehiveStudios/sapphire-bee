@@ -126,6 +126,12 @@ gh release create v1.0.0                        # Create release
 - Git credentials are stored in tmpfs (temporary, cleared on container stop)
 - PAT is not exposed in process lists or URLs (uses credential helper)
 
+**Branch Protection (enabled automatically):**
+- ⛔ Direct pushes to `main`/`master` are **blocked** by pre-push hook
+- ✅ Clone script automatically creates a `claude/work-*` branch
+- ✅ Force pushes and branch deletions are disabled
+- Use `gh pr create` to merge changes via pull request
+
 **Manual git configuration (if needed):**
 ```bash
 # Source the setup script manually

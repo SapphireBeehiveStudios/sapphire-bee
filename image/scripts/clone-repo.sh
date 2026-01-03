@@ -66,13 +66,65 @@ fi
 echo "Cloning repository: $REPO_URL"
 echo "Target directory: $TARGET_DIR"
 
-if git clone "$REPO_URL" "$TARGET_DIR"; then
-    echo "Successfully cloned repository to: $TARGET_DIR"
-    echo ""
-    echo "To work in this repository:"
-    echo "  cd $TARGET_DIR"
-else
+if ! git clone "$REPO_URL" "$TARGET_DIR"; then
     echo "ERROR: Failed to clone repository" >&2
     exit 1
 fi
+
+echo "Successfully cloned repository to: $TARGET_DIR"
+echo ""
+
+# ============================================
+# SAFETY: Install pre-push hook to protect main/master
+# ============================================
+HOOKS_DIR="${TARGET_DIR}/.git/hooks"
+mkdir -p "${HOOKS_DIR}"
+
+cat > "${HOOKS_DIR}/pre-push" << 'HOOK'
+#!/bin/bash
+# Pre-push hook: Prevent direct pushes to main/master branches
+
+protected_branches=("main" "master")
+current_branch=$(git symbolic-ref HEAD 2>/dev/null | sed 's|refs/heads/||')
+
+for branch in "${protected_branches[@]}"; do
+    if [[ "$current_branch" == "$branch" ]]; then
+        echo "🛑 ERROR: Direct push to '$branch' branch is blocked!"
+        echo ""
+        echo "To make changes safely:"
+        echo "  1. Create a feature branch:  git checkout -b claude/my-changes"
+        echo "  2. Make your changes and commit"
+        echo "  3. Push the feature branch:  git push -u origin claude/my-changes"
+        echo "  4. Create a PR:              gh pr create"
+        echo ""
+        exit 1
+    fi
+done
+
+exit 0
+HOOK
+
+chmod +x "${HOOKS_DIR}/pre-push"
+
+# Create a working branch automatically
+cd "$TARGET_DIR"
+BRANCH_NAME="claude/work-$(date +%Y%m%d-%H%M%S)"
+git checkout -b "$BRANCH_NAME"
+
+echo "============================================"
+echo "✅ Repository cloned and ready!"
+echo "============================================"
+echo ""
+echo "📁 Directory: $TARGET_DIR"
+echo "🌿 Branch:    $BRANCH_NAME (created automatically)"
+echo ""
+echo "⚠️  SAFETY: Direct pushes to main/master are BLOCKED"
+echo ""
+echo "Workflow:"
+echo "  cd $TARGET_DIR"
+echo "  # ... make changes ..."
+echo "  git add . && git commit -m 'your message'"
+echo "  git push -u origin $BRANCH_NAME"
+echo "  gh pr create --title 'Your PR title'"
+echo ""
 

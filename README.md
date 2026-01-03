@@ -219,6 +219,12 @@ echo 'GITHUB_PAT=ghp_...' >> .env
 - Set token expiration (90 days recommended)
 - PAT is auto-configured for git and gh CLI when container starts
 
+**Branch Protection (built-in):**
+- ⛔ Direct pushes to `main`/`master` branches are **blocked**
+- ✅ Repos are cloned to a `claude/work-*` branch automatically
+- ✅ Force pushes and remote branch deletions are disabled
+- Changes must be merged via pull request (`gh pr create`)
+
 **Usage:**
 ```bash
 # Inside the container, git and gh are automatically configured if GITHUB_PAT is set
