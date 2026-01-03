@@ -6,7 +6,7 @@
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
         run-godot promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
-        auth auth-status auth-setup-token install-hooks \
+        auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline
 
 # Default target
@@ -231,6 +231,16 @@ test: doctor validate ## Run all checks (not security tests)
 # SECURITY TESTS
 #==============================================================================
 
+install-tests: ## Install test dependencies (requires uv)
+	@if ! command -v uv >/dev/null 2>&1; then \
+		echo "Error: uv is not installed"; \
+		echo "Install with: brew install uv"; \
+		exit 1; \
+	fi
+	@echo "Installing test dependencies..."
+	@uv pip install --system -r tests/requirements.txt
+	@echo "✓ Test dependencies installed"
+
 test-security: _check-docker build ## Run all security tests
 	@echo "Running security tests..."
 	@cd tests && python3 -m pytest -v --tb=short
@@ -266,7 +276,7 @@ _check-docker:
 	fi
 	@if ! python3 -c "import pytest" 2>/dev/null; then \
 		echo "Error: pytest not installed"; \
-		echo "Install with: uv pip install -r tests/requirements.txt"; \
+		echo "Install with: make install-tests"; \
 		exit 1; \
 	fi
 

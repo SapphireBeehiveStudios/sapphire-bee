@@ -310,7 +310,7 @@ The sandbox includes comprehensive pytest-based security tests that verify all s
 
 ```bash
 # Install test dependencies (requires uv: brew install uv)
-uv pip install -r tests/requirements.txt
+make install-tests
 
 # Run all security tests
 make test-security

@@ -197,8 +197,8 @@ make run-godot PROJECT=~/my-game ARGS="--export-release Linux build/game"
 The sandbox includes comprehensive security tests to verify network restrictions, container hardening, and filesystem isolation:
 
 ```bash
-# Install test dependencies (requires uv)
-uv pip install -r tests/requirements.txt
+# Install test dependencies (requires uv: brew install uv)
+make install-tests
 
 # Run all security tests
 make test-security
@@ -354,6 +354,7 @@ godot-agent/
 | `make scan PROJECT=...` | Scan for dangerous patterns |
 | `make validate` | Validate compose files |
 | `make test` | Run all checks |
+| `make install-tests` | Install test dependencies |
 | `make test-security` | Run security tests |
 | `make ci` | Run CI workflow locally |
 | `make install-hooks` | Install pre-commit hooks |

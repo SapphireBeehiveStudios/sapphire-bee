@@ -24,10 +24,8 @@ The tests verify:
 # Install uv if not already installed
 brew install uv
 
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate
-uv pip install -r tests/requirements.txt
+# Install test dependencies (from repo root)
+make install-tests
 ```
 
 ## Running Tests
