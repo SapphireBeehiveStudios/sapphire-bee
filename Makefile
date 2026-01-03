@@ -6,7 +6,7 @@
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
         run-godot promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
-        auth auth-status auth-setup-token
+        auth auth-status auth-setup-token install-hooks
 
 # Default target
 .DEFAULT_GOAL := help
@@ -237,6 +237,12 @@ lint-scripts: ## Lint shell scripts with shellcheck
 		echo "shellcheck not installed. Install with: brew install shellcheck"; \
 		exit 1; \
 	fi
+
+install-hooks: ## Install git pre-commit hooks for secret scanning
+	@echo "Installing git hooks..."
+	@git config core.hooksPath .githooks
+	@echo "✓ Git hooks installed from .githooks/"
+	@echo "  Pre-commit hook will scan for secrets before each commit."
 
 #==============================================================================
 # CI/CD LOCAL TESTING (requires: brew install act)

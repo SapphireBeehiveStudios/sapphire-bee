@@ -112,12 +112,13 @@ If using an API key (pay-per-use):
 
 ### Best Practices
 
-1. **Prefer Claude Max** over API keys when possible
-2. **Use `.env` files** (gitignored) for API keys
-3. **Never commit secrets** to version control
-4. **Set up spending limits** in Anthropic console if using API keys
-5. **Monitor usage** for anomalies
-6. **Run `./scripts/setup-claude-auth.sh status`** to verify your configuration
+1. **Install pre-commit hooks**: `make install-hooks` (scans for secrets before commit)
+2. **Prefer Claude Max** over API keys when possible
+3. **Use `.env` files** (gitignored) for API keys
+4. **Never commit secrets** to version control
+5. **Set up spending limits** in Anthropic console if using API keys
+6. **Monitor usage** for anomalies
+7. **Run `./scripts/setup-claude-auth.sh status`** to verify your configuration
 
 ## Reviewing Suspicious Code
 

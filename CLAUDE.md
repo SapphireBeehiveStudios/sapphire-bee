@@ -146,6 +146,19 @@ docker buildx build --platform linux/amd64,linux/arm64 -t image:tag ./image
 - `logs/` directory
 - Any API keys or tokens
 
+## Git Hooks
+
+Install pre-commit hooks to automatically scan for secrets:
+```bash
+make install-hooks
+```
+
+This configures git to use `.githooks/pre-commit` which blocks commits containing:
+- Anthropic API keys (`sk-ant-...`)
+- Docker PATs (`dckr_pat_...`)
+- OAuth tokens in code
+- The `.env` file itself
+
 ## Common Issues
 
 1. **DNS not working**: Restart with `make down && make up`
