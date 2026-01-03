@@ -51,7 +51,8 @@ services:
     # Direct mount: host project directory -> /project (RW)
     volumes:
       - ${PROJECT_PATH:-./../project}:/project:rw
-    
+      - ../secrets:/secrets:ro
+
     # Security hardening
     read_only: true
     tmpfs:

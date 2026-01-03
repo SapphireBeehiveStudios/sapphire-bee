@@ -937,6 +937,49 @@ Prefer MCP tools over CLI commands:
 
 ## Troubleshooting
 
+### Verify MCP is Working
+
+**First step for any MCP issues:** Run the verification script:
+
+```bash
+# Quick verification
+/opt/scripts/verify-mcp.sh
+
+# Verbose output (shows more details)
+GITHUB_DEBUG=1 /opt/scripts/verify-mcp.sh --verbose
+
+# Test access to a specific repo
+GITHUB_VERIFY_REPO=owner/repo /opt/scripts/verify-mcp.sh
+```
+
+The script checks:
+- ✓ MCP configuration exists in settings.json
+- ✓ GitHub token is present and valid
+- ✓ Token has correct permissions
+- ✓ Environment variables are set for gh CLI
+
+### MCP Tools Not Available
+
+If MCP tools aren't working:
+
+1. **Check if MCP server is configured:**
+   ```bash
+   cat ~/.claude/settings.json | jq .mcpServers
+   ```
+   Should show a `github` object with command and token.
+
+2. **Verify token is valid:**
+   ```bash
+   TOKEN=$(cat ~/.claude/settings.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
+   curl -H "Authorization: Bearer $TOKEN" https://api.github.com/rate_limit
+   ```
+
+3. **Fallback to gh CLI with explicit token:**
+   ```bash
+   TOKEN=$(cat ~/.claude/settings.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
+   GH_TOKEN=$TOKEN gh pr create --title "..." --body "..."
+   ```
+
 ### MCP Tool Failures
 
 | Error | Cause | Solution |
@@ -945,6 +988,7 @@ Prefer MCP tools over CLI commands:
 | "Resource not accessible" | Permission issue | Check if repo is private; token may lack access |
 | "Validation Failed" | Missing required fields | Check all required parameters are provided |
 | Push/PR creation fails | Branch protection or conflict | Pull latest main, rebase your branch |
+| "MCP tools not available" | Server not running | Run `/opt/scripts/verify-mcp.sh --verbose` |
 
 ### Network Issues
 
