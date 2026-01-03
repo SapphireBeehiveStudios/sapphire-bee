@@ -113,10 +113,12 @@ show_status() {
     
     # Summary
     echo "════════════════════════════════════════════════════════════════"
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        echo -e "${GREEN}Ready:${NC} Using API key authentication (pay-per-use)"
-    elif [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-        echo -e "${GREEN}Ready:${NC} Using Claude Max subscription"
+    if [[ "$HAS_AUTH" == "true" ]]; then
+        if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo -e "${GREEN}Ready:${NC} Using API key authentication (pay-per-use)"
+        else
+            echo -e "${GREEN}Ready:${NC} Using Claude Max subscription"
+        fi
     else
         echo -e "${YELLOW}Action needed:${NC} Set up authentication"
         echo ""
