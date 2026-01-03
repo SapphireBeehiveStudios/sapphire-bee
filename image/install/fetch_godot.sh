@@ -41,18 +41,16 @@ GODOT_BINARY_NAME="Godot_v${GODOT_VERSION}-${GODOT_RELEASE_TYPE}_linux.${GODOT_A
 
 if [[ "$GODOT_RELEASE_TYPE" == "stable" ]]; then
     # Stable releases are on both repos
-    GITHUB_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
+    GITHUB_BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
     TUXFAMILY_URL="https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${GODOT_BINARY_NAME}.zip"
 else
     # Pre-releases (beta, rc, dev) are ONLY on godot-builds repo
-    GITHUB_URL="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
+    GITHUB_BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_RELEASE_TYPE}"
     TUXFAMILY_URL="https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${GODOT_RELEASE_TYPE}/${GODOT_BINARY_NAME}.zip"
 fi
 
-# Expected SHA256 checksum - TODO: Update this with the actual checksum
-# You can get this from the official Godot downloads page or compute it yourself
-# Example: sha256sum Godot_v4.3-stable_linux.x86_64.zip
-EXPECTED_SHA256="${GODOT_SHA256:-TODO_UPDATE_CHECKSUM_FROM_OFFICIAL_SOURCE}"
+GITHUB_URL="${GITHUB_BASE}/${GODOT_BINARY_NAME}.zip"
+SHA512_SUMS_URL="${GITHUB_BASE}/SHA512-SUMS.txt"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/godot}"
 TEMP_DIR=$(mktemp -d)
@@ -69,28 +67,10 @@ echo "Binary name: ${GODOT_BINARY_NAME}"
 echo "Install directory: ${INSTALL_DIR}"
 echo ""
 echo "Download URLs:"
-echo "  Primary:  ${GITHUB_URL}"
+echo "  Binary:   ${GITHUB_URL}"
+echo "  Checksums: ${SHA512_SUMS_URL}"
 echo "  Fallback: ${TUXFAMILY_URL}"
 echo ""
-
-# Check if checksum verification should be skipped
-SKIP_CHECKSUM=false
-if [[ "$EXPECTED_SHA256" == "TODO_UPDATE_CHECKSUM_FROM_OFFICIAL_SOURCE" ]] || [[ -z "$EXPECTED_SHA256" ]]; then
-    echo "WARNING: GODOT_SHA256 environment variable is not set!"
-    echo ""
-    echo "To enable checksum verification (recommended for production):"
-    echo "1. Visit https://godotengine.org/download/server/"
-    echo "2. Download the Linux server/headless build"
-    echo "3. Run: sha256sum <downloaded_file>"
-    echo "4. Set GODOT_SHA256=<checksum> in your build args"
-    echo ""
-    echo "Alternatively, for Godot 4.x releases, check:"
-    echo "https://github.com/godotengine/godot/releases"
-    echo ""
-    echo "Proceeding WITHOUT checksum verification..."
-    echo ""
-    SKIP_CHECKSUM=true
-fi
 
 cd "$TEMP_DIR"
 
@@ -130,28 +110,36 @@ if [[ "$download_success" != "true" ]]; then
     exit 1
 fi
 
-if [[ "$SKIP_CHECKSUM" == "true" ]]; then
-    echo "Skipping SHA256 checksum verification (not recommended for production)"
-    ACTUAL_SHA256=$(sha256sum godot.zip | awk '{print $1}')
-    echo "Downloaded file SHA256: ${ACTUAL_SHA256}"
-    echo "Save this checksum for production builds!"
-else
-    echo "Verifying SHA256 checksum..."
-    ACTUAL_SHA256=$(sha256sum godot.zip | awk '{print $1}')
-
-    if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
-        echo "ERROR: Checksum verification failed!"
-        echo "Expected: ${EXPECTED_SHA256}"
-        echo "Got:      ${ACTUAL_SHA256}"
-        echo ""
-        echo "This could indicate:"
-        echo "- Corrupted download"
-        echo "- Tampered file"
-        echo "- Wrong checksum value in build args"
-        exit 1
+# Download and verify using official SHA512 checksums
+echo ""
+echo "Downloading SHA512 checksums from: ${SHA512_SUMS_URL}"
+if curl -fsSL -o SHA512-SUMS.txt "$SHA512_SUMS_URL"; then
+    echo "Verifying SHA512 checksum..."
+    
+    # Extract expected checksum for our binary
+    EXPECTED_SHA512=$(grep "${GODOT_BINARY_NAME}.zip" SHA512-SUMS.txt | awk '{print $1}')
+    
+    if [[ -z "$EXPECTED_SHA512" ]]; then
+        echo "WARNING: Could not find checksum for ${GODOT_BINARY_NAME}.zip in SHA512-SUMS.txt"
+        echo "Skipping verification..."
+    else
+        ACTUAL_SHA512=$(sha512sum godot.zip | awk '{print $1}')
+        
+        if [[ "$ACTUAL_SHA512" != "$EXPECTED_SHA512" ]]; then
+            echo "ERROR: Checksum verification failed!"
+            echo "Expected: ${EXPECTED_SHA512}"
+            echo "Got:      ${ACTUAL_SHA512}"
+            echo ""
+            echo "This could indicate:"
+            echo "- Corrupted download"
+            echo "- Tampered file"
+            exit 1
+        fi
+        
+        echo "✓ SHA512 checksum verified successfully!"
     fi
-
-    echo "Checksum verified successfully!"
+else
+    echo "WARNING: Could not download SHA512-SUMS.txt, skipping verification"
 fi
 
 echo "Extracting to ${INSTALL_DIR}..."
