@@ -219,6 +219,14 @@ This file is copied to `~/.claude/settings.json` on container start via `image/s
 
 If you need stricter control, use the container-level restrictions (e.g., offline mode, staging mode) rather than relying on Claude's internal permissions.
 
+### Non-Interactive Mode Behavior
+
+When Claude Code CLI runs in non-interactive mode (no TTY attached, such as in scripts, CI/CD, or queue processing), the Write/Edit tools request permission even when `bypassPermissionsMode: true` is configured. Since there's no interactive terminal to grant permission, these tools are effectively unavailable in non-interactive contexts. This is a built-in Claude Code CLI safety behavior.
+
+**Workaround:** Claude automatically uses the Bash tool for file operations in non-interactive contexts. The Bash tool works reliably in both interactive and non-interactive modes, so file creation and modification still function correctly (e.g., using `echo`, `cat`, or heredoc syntax).
+
+**Impact:** Low - Claude Code is fully functional for code analysis, file reading, and can perform all file operations via Bash commands.
+
 ## Container Hardening Details
 
 ### Applied Security Measures

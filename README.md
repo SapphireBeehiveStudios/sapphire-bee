@@ -519,6 +519,8 @@ This is configured in `image/config/claude-settings.json` and applied automatica
 
 This approach means Claude can work autonomously without permission prompts, while the container sandbox enforces the actual security boundary.
 
+**Note:** In non-interactive mode (scripts, CI/CD, queue processing), Claude Code CLI's Write/Edit tools request permission even with `bypassPermissionsMode: true` configured. Since there's no interactive terminal to grant permission, these tools are effectively unavailable. Claude automatically uses the Bash tool for file operations in these contexts, which works reliably. Impact: Low - all file operations continue to function via Bash commands.
+
 ### What This Does NOT Protect Against
 
 1. **Malicious code in project**: If Claude writes malicious GDScript, the Godot Editor on host could execute it

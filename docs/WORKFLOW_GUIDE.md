@@ -179,6 +179,8 @@ make claude-print P="Generate a list of all scene files"
 - With TTY: Uses `-it` flags for interactive mode
 - Without TTY: Runs non-interactively (safe for scripts and CI)
 
+**Note on Non-Interactive Mode:** In non-interactive contexts (scripts, CI/CD), Claude Code CLI's Write/Edit tools request permission even with `bypassPermissionsMode: true` configured. Since there's no terminal to grant permission, these tools are effectively unavailable. Claude automatically uses the Bash tool for file operations in these cases, which works reliably. Impact: Low - file creation and modification still work correctly via Bash commands.
+
 ### Checking Status
 
 ```bash

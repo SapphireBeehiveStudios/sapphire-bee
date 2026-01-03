@@ -113,6 +113,13 @@ docker exec agent claude "prompt"  # Works without -it in scripts
 - Claude Code permissions are pre-granted (no approval prompts needed)
 - Environment variables from `.env` are properly passed to the container
 
+**Note on Non-Interactive Mode Limitations:**
+In non-interactive mode (when running without a TTY, such as in scripts or CI/CD), Claude Code CLI's Write/Edit tools request permission even when `bypassPermissionsMode: true` is configured. Since there's no interactive terminal to grant permission, these tools effectively cannot be used in non-interactive contexts. This is a built-in safety behavior of Claude Code CLI.
+
+**Workaround:** Claude can still create and modify files using the Bash tool, which works reliably in both interactive and non-interactive modes. When Claude needs to write files in non-interactive contexts, it will automatically use Bash commands (e.g., `echo "content" > file` or `cat > file <<EOF`) instead of the Write/Edit tools.
+
+**Impact:** Low - Claude Code is fully functional for code analysis, file reading, and can perform all file operations via Bash commands.
+
 ### Skill: Running Claude in the Sandbox (One-shot Mode)
 
 For ephemeral sessions that don't persist context:
