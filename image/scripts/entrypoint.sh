@@ -67,38 +67,22 @@ setup_claude_config() {
 # Run setup
 setup_claude_config
 
-# Configure GitHub authentication (GitHub App takes priority over PAT)
+# Configure GitHub authentication via GitHub App (MCP only - no PAT/gh CLI)
 if [[ -n "${GITHUB_APP_ID:-}" ]] && [[ -n "${GITHUB_APP_INSTALLATION_ID:-}" ]]; then
-    # GitHub App authentication (recommended)
     if [[ -f /opt/scripts/setup-github-app.sh ]]; then
         # shellcheck source=/dev/null
         source /opt/scripts/setup-github-app.sh || {
-            echo "WARNING: GitHub App setup failed, falling back to PAT if available" >&2
+            echo "ERROR: GitHub App setup failed. MCP tools will not be available." >&2
+            echo "  Check GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and private key." >&2
         }
     fi
-elif [[ -n "${GITHUB_PAT:-}" ]]; then
-    # Personal Access Token authentication (legacy)
-    if [[ -f /opt/scripts/setup-git-pat.sh ]]; then
-        # shellcheck source=/dev/null
-        source /opt/scripts/setup-git-pat.sh || true
-    fi
-    
-    # Configure GitHub CLI (gh) - it uses GH_TOKEN env var for auth
-    export GH_TOKEN="${GITHUB_PAT}"
-    
-    # Set default git protocol to https (required for PAT auth)
-    if command -v gh >/dev/null 2>&1; then
-        gh config set git_protocol https --host github.com 2>/dev/null || true
-    fi
+else
+    echo "⚠️  No GitHub App configured. MCP tools will not be available." >&2
+    echo "   Set GITHUB_APP_ID and GITHUB_APP_INSTALLATION_ID to enable GitHub access." >&2
 fi
 
-# Set default git protocol to https for GitHub CLI
-if command -v gh >/dev/null 2>&1; then
-    gh config set git_protocol https --host github.com 2>/dev/null || true
-fi
-
-# Verify MCP configuration if GitHub auth was set up
-if [[ -n "${GITHUB_TOKEN:-}" ]] || [[ -n "${GH_TOKEN:-}" ]]; then
+# Verify MCP configuration
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     if [[ -f /opt/scripts/verify-mcp.sh ]]; then
         echo "" >&2
         if [[ "${GITHUB_DEBUG:-}" == "1" ]]; then

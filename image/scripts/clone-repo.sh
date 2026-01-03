@@ -1,5 +1,5 @@
 #!/bin/bash
-# clone-repo.sh - Clones a GitHub repository using PAT authentication
+# clone-repo.sh - Clones a GitHub repository using GitHub App authentication
 #
 # Usage:
 #   /opt/scripts/clone-repo.sh owner/repo [target-directory]
@@ -8,16 +8,11 @@
 # Examples:
 #   /opt/scripts/clone-repo.sh SapphireBeehiveStudios/godot-agent
 #   /opt/scripts/clone-repo.sh myorg/myrepo /project/my-repo
+#
+# Requires:
+#   GITHUB_TOKEN environment variable (set by GitHub App setup)
 
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Source the git PAT setup script
-if [[ -f "${SCRIPT_DIR}/setup-git-pat.sh" ]]; then
-    # shellcheck source=/dev/null
-    source "${SCRIPT_DIR}/setup-git-pat.sh"
-fi
 
 # Parse arguments
 if [[ $# -lt 1 ]]; then
@@ -57,9 +52,10 @@ if [[ -d "$TARGET_DIR" ]]; then
     exit 1
 fi
 
-# Check if GITHUB_PAT is set (warn but don't fail for public repos)
-if [[ -z "${GITHUB_PAT:-}" ]]; then
-    echo "WARNING: GITHUB_PAT not set. This will only work for public repositories." >&2
+# Check if GITHUB_TOKEN is set (from GitHub App)
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+    echo "WARNING: GITHUB_TOKEN not set. Cloning will only work for public repositories." >&2
+    echo "  Ensure GitHub App is configured (GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID)." >&2
 fi
 
 # Clone the repository
@@ -95,7 +91,7 @@ for branch in "${protected_branches[@]}"; do
         echo "  1. Create a feature branch:  git checkout -b claude/my-changes"
         echo "  2. Make your changes and commit"
         echo "  3. Push the feature branch:  git push -u origin claude/my-changes"
-        echo "  4. Create a PR:              gh pr create"
+        echo "  4. Create a PR:              Use MCP create_pull_request tool"
         echo ""
         exit 1
     fi
@@ -125,6 +121,6 @@ echo "  cd $TARGET_DIR"
 echo "  # ... make changes ..."
 echo "  git add . && git commit -m 'your message'"
 echo "  git push -u origin $BRANCH_NAME"
-echo "  gh pr create --title 'Your PR title'"
+echo "  # Use MCP create_pull_request tool to create a PR"
 echo ""
 

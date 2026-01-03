@@ -108,11 +108,10 @@ COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
 # Copy entrypoint script and set permissions in one layer
 # Scripts change more frequently, so they're copied later
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY scripts/setup-git-pat.sh /opt/scripts/setup-git-pat.sh
 COPY scripts/setup-github-app.sh /opt/scripts/setup-github-app.sh
 COPY scripts/clone-repo.sh /opt/scripts/clone-repo.sh
 COPY scripts/verify-mcp.sh /opt/scripts/verify-mcp.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /opt/scripts/setup-git-pat.sh \
+RUN chmod +x /usr/local/bin/entrypoint.sh \
     /opt/scripts/setup-github-app.sh /opt/scripts/clone-repo.sh \
     /opt/scripts/verify-mcp.sh
 
