@@ -49,6 +49,15 @@ You are running inside a **sandboxed Docker container** with restricted network 
 | Search code | `search_code` |
 | Push files | `push_files` |
 
+### Priority Labels (Work on Higher Priority First!)
+
+| Label | Level | Action |
+|-------|-------|--------|
+| `priority: critical` | P0 🔴 | Drop everything, fix NOW |
+| `priority: high` | P1 🟠 | Work on these first |
+| `priority: medium` | P2 🟡 | Normal queue |
+| `priority: low` | P3 🟢 | When nothing else |
+
 ### Workflow Cheat Sheet
 
 | Mode | First Step | Last Step |
@@ -405,15 +414,49 @@ If you're running in **Issue Mode**, you browse existing GitHub issues to find w
 
 ### Step 1: Find an Unclaimed Issue
 
-Use MCP tools to list issues and find work:
+Use MCP tools to list issues and find work, **prioritizing by urgency**:
+
+#### Priority Labels
+
+Issues are labeled with priority levels. **Always work on higher priority issues first:**
+
+| Label | Priority | Description |
+|-------|----------|-------------|
+| `priority: critical` | P0 | 🔴 Drop everything, fix immediately |
+| `priority: high` | P1 | 🟠 Important, address soon |
+| `priority: medium` | P2 | 🟡 Normal priority |
+| `priority: low` | P3 | 🟢 Nice to have, when time permits |
+
+#### Finding Issues by Priority
 
 ```
 Use list_issues on owner/repo to see open issues.
-Look for issues that:
+
+Priority order for selecting work:
+1. First: Look for "priority: critical" issues (P0)
+2. Then: Look for "priority: high" issues (P1)
+3. Then: Look for "priority: medium" issues (P2)
+4. Finally: "priority: low" or unlabeled issues (P3)
+
+Within each priority level, prefer issues that:
 - Are open (not closed)
 - Have no assignee
 - Have no recent "claiming" comments from other agents
+- Have the "good first issue" label (if you're warming up)
 ```
+
+#### Filtering by Labels
+
+When using `list_issues`, you can filter by labels:
+
+```
+Use list_issues:
+  - owner: owner
+  - repo: repo
+  - labels: ["priority: critical"]  # Filter to critical issues only
+```
+
+**If no critical/high priority issues exist**, work on medium priority. If none exist, work on low priority or unlabeled issues.
 
 ### Step 2: Claim the Issue
 
