@@ -177,7 +177,9 @@ Skills are documented procedures for common tasks. Reference these when performi
 │  Available:                                                 │
 │    - GitHub MCP tools (for API: issues, PRs, remote files)  │
 │    - Git CLI (for local ops + push via configured remote)   │
-│    - Node.js, Python 3, common dev tools                    │
+│    - Node.js, Python 3, Go 1.19, common dev tools           │
+│    - Build tools: gcc, g++, make                            │
+│    - Package managers: pip (Python), go mod (Go), npm       │
 │                                                             │
 │  Restricted:                                                │
 │    - Network: Only allowlisted domains via proxy            │
@@ -1027,8 +1029,95 @@ You can **only** reach these domains (via proxy):
 | raw.githubusercontent.com | Raw file content |
 | codeload.github.com | Archive downloads |
 | api.anthropic.com | Claude API |
+| proxy.golang.org | Go module downloads |
+| sum.golang.org | Go module checksums |
+| pypi.org | Python Package Index |
+| files.pythonhosted.org | Python package files |
 
 **All other domains are blocked.**
+
+### Package Manager Access
+
+The sandbox provides secure access to package managers for building and testing projects:
+
+#### Go Modules
+
+Go module downloads are routed through the official Go proxy:
+
+```bash
+# Download dependencies
+cd /project/your-go-service
+go mod download
+
+# Build the project
+go build
+
+# Run tests
+go test ./...
+```
+
+**Network routing:**
+- `go get`, `go mod download` → proxy.golang.org (10.100.1.20)
+- Module checksums → sum.golang.org (10.100.1.21)
+
+#### Python Packages
+
+Python package installation requires a virtual environment:
+
+```bash
+# Create venv in project directory
+cd /project
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+pytest
+```
+
+**Why venv is required:** Python 3.11+ enforces PEP 668 which prevents system-wide pip installs. Always use a virtual environment.
+
+**Network routing:**
+- Package search → pypi.org (10.100.1.22)
+- Package downloads → files.pythonhosted.org (10.100.1.23)
+
+#### Node/npm Packages
+
+npm is available for JavaScript/TypeScript projects:
+
+```bash
+# Install dependencies
+cd /project
+npm install
+
+# Run tests
+npm test
+```
+
+### Build Tools
+
+The following build tools are pre-installed:
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| `go` | 1.19.8 | Go compiler and toolchain |
+| `python3` | 3.11.2 | Python interpreter |
+| `pip` | 23.0.1 | Python package installer |
+| `node` | 18.x | JavaScript runtime |
+| `npm` | 9.x | Node package manager |
+| `gcc` | 12.x | C compiler (for native extensions) |
+| `g++` | 12.x | C++ compiler |
+| `make` | 4.3 | Build automation tool |
+
+These tools enable you to:
+- Build Go services and run Go tests
+- Install Python dependencies and run pytest
+- Compile native extensions (C/C++)
+- Run make targets for multi-language projects
+
+**Security note:** All package downloads are routed through isolated nginx proxies with network segmentation. The sandbox cannot access arbitrary internet domains.
 
 ## Git Workflow (When Using Git CLI)
 
