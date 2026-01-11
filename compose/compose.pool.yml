@@ -26,16 +26,13 @@ services:
     build:
       context: ../image
       dockerfile: Dockerfile
-      args:
-        - GODOT_VERSION=${GODOT_VERSION:-4.6}
-        - GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE:-beta2}
-    image: claude-godot-agent:latest
+    image: sapphire-bee:latest
     # No container_name - allows scaling
-    
+
     # Run the issue worker script
     command: ["node", "/opt/scripts/issue-worker.js"]
     restart: unless-stopped
-    
+
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -53,19 +50,19 @@ services:
       - POLL_INTERVAL=${POLL_INTERVAL:-60}
       - HOME=/home/claude
       - USER=claude
-    
+
     # Network: sandbox only, use dnsfilter for DNS
     networks:
       sandbox_net:
     dns:
       - 10.100.1.2  # dnsfilter
-    
+
     # Each worker gets its own anonymous volume (not named - anonymous volumes are per-container)
     volumes:
       - /project
       - ../secrets:/secrets:ro
       - ../image/scripts/issue-worker.js:/opt/scripts/issue-worker.js:ro
-    
+
     # Security hardening
     read_only: true
     tmpfs:
@@ -75,7 +72,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    
+
     # Resource limits
     deploy:
       resources:
@@ -85,7 +82,7 @@ services:
           pids: 256
         reservations:
           memory: 256M
-    
+
     depends_on:
       dnsfilter:
         condition: service_started
@@ -93,10 +90,10 @@ services:
         condition: service_started
       proxy_anthropic_api:
         condition: service_started
-    
+
     working_dir: /project
 
 networks:
   sandbox_net:
     external: true
-    name: claude-godot-sandbox_sandbox_net
+    name: sapphire-bee-sandbox_sandbox_net

@@ -141,7 +141,7 @@ async function getInstallationToken() {
         headers: {
             'Authorization': `Bearer ${jwt}`,
             'Accept': 'application/vnd.github+json',
-            'User-Agent': 'claude-godot-agent',
+            'User-Agent': 'sapphire-bee-agent',
             'X-GitHub-Api-Version': '2022-11-28'
         }
     });
@@ -169,7 +169,7 @@ async function github(method, endpoint, body = null) {
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github+json',
-            'User-Agent': 'claude-godot-agent',
+            'User-Agent': 'sapphire-bee-agent',
             'X-GitHub-Api-Version': '2022-11-28',
             'Content-Type': 'application/json'
         }
@@ -206,8 +206,8 @@ async function ensureRepoCloned() {
     });
     
     // Configure git
-    execSync('git config user.name "Godot Agent"', { cwd: PROJECT_DIR });
-    execSync('git config user.email "2587725+godot-agent[bot]@users.noreply.github.com"', { cwd: PROJECT_DIR });
+    execSync('git config user.name "Sapphire Bee Agent"', { cwd: PROJECT_DIR });
+    execSync('git config user.email "2587725+sapphire-bee[bot]@users.noreply.github.com"', { cwd: PROJECT_DIR });
     
     log('Repository cloned successfully');
 }
@@ -486,7 +486,7 @@ async function createPullRequest(issue, branchName, claudeOutput) {
 ${claudeOutput.substring(0, 3000)}
 
 ---
-🤖 *This PR was automatically created by Godot Agent \`${WORKER_ID}\`*`;
+🤖 *This PR was automatically created by Sapphire Bee Agent \`${WORKER_ID}\`*`;
 
     const prResponse = await github('POST',
         `/repos/${owner}/${repo}/pulls`,

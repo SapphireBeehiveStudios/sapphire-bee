@@ -1,42 +1,16 @@
-# Dockerfile for Claude-Godot Sandbox Agent
-# Provides: Godot 4.x headless + Claude Code CLI
-# Target: Linux arm64 (Apple Silicon via Docker)
+# Dockerfile for Sapphire Bee Sandbox Agent
+# Provides: Claude Code CLI in a secure, sandboxed environment
+# Target: Linux arm64/amd64
 #
 # Optimized for build cache efficiency and faster rebuilds
 
-# Build arguments for version pinning
-ARG GODOT_VERSION=4.6
-ARG GODOT_RELEASE_TYPE=beta2
-
-# NOTE: Native arm64 Godot builds may require building from source
-
-# --- Stage 1: Build/Download dependencies ---
-FROM debian:bookworm-slim AS builder
-
-ARG GODOT_VERSION
-ARG GODOT_RELEASE_TYPE
-
-# Install build tools and fetch Godot in a single layer for better caching
-# Copy script first (separate layer) so script changes don't invalidate apt cache
-COPY install/fetch_godot.sh /tmp/fetch_godot.sh
-# hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    unzip \
-    && chmod +x /tmp/fetch_godot.sh \
-    && GODOT_VERSION=${GODOT_VERSION} \
-    GODOT_RELEASE_TYPE=${GODOT_RELEASE_TYPE} \
-    /tmp/fetch_godot.sh \
-    && rm -rf /var/lib/apt/lists/*
-
-# --- Stage 2: Runtime image ---
+# --- Runtime image ---
 FROM debian:bookworm-slim AS runtime
 
 # Labels for image metadata
-LABEL org.opencontainers.image.title="Claude-Godot Sandbox Agent"
-LABEL org.opencontainers.image.description="Sandboxed environment for Claude Code + Godot development"
-LABEL org.opencontainers.image.source="https://github.com/SapphireBeehiveStudios/godot-agent"
+LABEL org.opencontainers.image.title="Sapphire Bee Sandbox Agent"
+LABEL org.opencontainers.image.description="Sandboxed environment for Claude Code development"
+LABEL org.opencontainers.image.source="https://github.com/SapphireBeehiveStudios/sapphire-bee"
 
 # Use bash with pipefail for proper error handling in piped commands
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -59,14 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     # Python for GitHub App token generation
     python3 \
-    # Godot runtime dependencies
-    libfontconfig1 \
-    libgl1 \
-    libxi6 \
-    libxcursor1 \
-    libxinerama1 \
-    libxrandr2 \
-    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for Python package management (faster than pip)
@@ -100,11 +66,6 @@ RUN groupadd -g 1000 claude && \
     mkdir -p /project /home/claude/.config /etc/claude && \
     chown -R claude:claude /project /home/claude
 
-# Copy Godot binary from builder (after user creation for proper ownership)
-# This is version-dependent, so it changes when Godot version changes
-COPY --from=builder /opt/godot /opt/godot
-COPY --from=builder /usr/local/bin/godot /usr/local/bin/godot
-
 # Copy entrypoint script and set permissions in one layer
 # Scripts change more frequently, so they're copied later
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -123,7 +84,6 @@ COPY config/sandbox-context.md /etc/claude/sandbox-context.md
 # Set environment variables (stable, rarely changes)
 ENV HOME=/home/claude
 ENV USER=claude
-ENV GODOT_PATH=/opt/godot/godot
 
 # Switch to non-root user
 USER claude
@@ -138,4 +98,4 @@ CMD ["bash"]
 
 # Health check - verify core tools are available
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD godot --headless --version || exit 1
+    CMD claude --version || exit 1
