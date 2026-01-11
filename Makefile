@@ -1,10 +1,10 @@
-# Claude-Godot Sandbox Makefile
+# Sapphire Bee Sandbox Makefile
 # Usage: make <target>
 #
 # Run 'make help' to see all available targets
 
 .PHONY: help build up down doctor logs clean run-direct run-staging run-offline \
-        run-godot promote diff-review scan logs-report shell test validate \
+        promote diff-review scan logs-report shell test validate \
         build-no-cache restart status ci ci-validate ci-build ci-list ci-dry-run \
         auth auth-status auth-setup-token install-hooks install-tests \
         test-security test-dns test-network test-hardening test-filesystem test-offline \
@@ -12,15 +12,13 @@
         up-agent down-agent up-isolated down-isolated \
         claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
-        pool-start pool-stop pool-status pool-logs pool-scale \
+        pool-start pool-stop pool-status pool-logs pool-logs-worker pool-scale \
         github-app-test github-app-validate
 
 # Default target
 .DEFAULT_GOAL := help
 
-# Configuration (can be overridden: make build GODOT_VERSION=4.4)
-GODOT_VERSION ?= 4.6
-GODOT_RELEASE_TYPE ?= beta2
+# Configuration
 PROJECT_PATH ?=
 STAGING_PATH ?=
 LIVE_PATH ?=
@@ -43,7 +41,7 @@ RESET := \033[0m
 
 help: ## Show this help message
 	@echo ""
-	@echo "$(CYAN)Claude-Godot Sandbox$(RESET)"
+	@echo "$(CYAN)Sapphire Bee Sandbox$(RESET)"
 	@echo "====================="
 	@echo ""
 	@echo "$(GREEN)Quick Start (Persistent Mode - Recommended):$(RESET)"
@@ -51,7 +49,7 @@ help: ## Show this help message
 	@echo "  make build                     # Build the agent image"
 	@echo ""
 	@echo "$(CYAN)Persistent Mode (mount local project):$(RESET)"
-	@echo "  make up-agent PROJECT=~/game   # Start agent with local project"
+	@echo "  make up-agent PROJECT=~/myproj # Start agent with local project"
 	@echo "  make claude                    # Interactive Claude session"
 	@echo "  make claude P=\"your prompt\"    # Single prompt"
 	@echo "  make down-agent                # Stop when done"
@@ -74,12 +72,11 @@ help: ## Show this help message
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-18s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Examples:$(RESET)"
-	@echo "  make up-agent PROJECT=~/my-godot-game"
-	@echo "  make claude P=\"Add player movement\""
-	@echo "  make pool-start REPO=myorg/mygame WORKERS=5"
-	@echo "  make run-direct PROJECT=~/my-godot-game"
-	@echo "  make run-staging STAGING=~/staging LIVE=~/my-godot-game"
-	@echo "  make run-godot PROJECT=~/my-godot-game ARGS='--version'"
+	@echo "  make up-agent PROJECT=~/my-project"
+	@echo "  make claude P=\"Add a new feature\""
+	@echo "  make pool-start REPO=myorg/myrepo WORKERS=5"
+	@echo "  make run-direct PROJECT=~/my-project"
+	@echo "  make run-staging STAGING=~/staging LIVE=~/my-project"
 	@echo ""
 
 #==============================================================================
@@ -140,14 +137,10 @@ github-app-validate: _check-tests ## Validate GitHub App setup (quick check)
 	fi
 
 build: ## Build the agent container image
-	@GODOT_VERSION=$(GODOT_VERSION) \
-	 GODOT_RELEASE_TYPE=$(GODOT_RELEASE_TYPE) \
-	 ./$(SCRIPT_DIR)/build.sh
+	@./$(SCRIPT_DIR)/build.sh
 
 build-no-cache: ## Build image without cache
-	@GODOT_VERSION=$(GODOT_VERSION) \
-	 GODOT_RELEASE_TYPE=$(GODOT_RELEASE_TYPE) \
-	 ./$(SCRIPT_DIR)/build.sh --no-cache
+	@./$(SCRIPT_DIR)/build.sh --no-cache
 
 validate: ## Validate compose configuration
 	@echo "Validating compose files..."
@@ -430,7 +423,8 @@ pool-start: _check-repo _check-auth ## Start worker pool (REPO=owner/repo WORKER
 	@echo ""
 	@echo "Commands:"
 	@echo "  make pool-status               - Show worker status"
-	@echo "  make pool-logs                 - Follow worker logs"
+	@echo "  make pool-logs                 - Follow all worker logs"
+	@echo "  make pool-logs-worker WORKER=1 - Follow logs for specific worker"
 	@echo "  make pool-scale WORKERS=5      - Scale to 5 workers"
 	@echo "  make pool-stop                 - Stop all workers"
 
@@ -452,26 +446,32 @@ pool-status: ## Show worker pool status
 pool-logs: ## Follow worker pool logs
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml logs -f worker
 
+pool-logs-worker: ## Follow logs for specific worker (WORKER=N or WORKER=worker-N)
+ifndef WORKER
+	@echo "Error: WORKER is required"
+	@echo "Usage: make pool-logs-worker WORKER=1"
+	@echo "   or: make pool-logs-worker WORKER=worker-1"
+	@exit 1
+endif
+	@WORKER_NUM=$(WORKER); \
+	if echo "$$WORKER_NUM" | grep -q '^worker-'; then \
+		WORKER_NUM=$$(echo "$$WORKER_NUM" | sed 's/^worker-//'); \
+	fi; \
+	CONTAINER_NAME=$$(docker ps --format '{{.Names}}' | grep -E "worker-$$WORKER_NUM$$" | head -1); \
+	if [ -z "$$CONTAINER_NAME" ]; then \
+		echo "Error: Worker $$WORKER_NUM not found"; \
+		echo ""; \
+		echo "Available workers:"; \
+		docker ps --format '{{.Names}}' | grep worker | sed 's/^/  /'; \
+		exit 1; \
+	fi; \
+	echo "Following logs for $$CONTAINER_NAME..."; \
+	docker logs -f "$$CONTAINER_NAME"
+
 pool-scale: _check-auth ## Scale worker pool (WORKERS=N)
 	@echo "Scaling worker pool to $(WORKERS) workers..."
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml up -d --scale worker=$(WORKERS)
 	@echo "Pool scaled to $(WORKERS) workers."
-
-#==============================================================================
-# GODOT OPERATIONS
-#==============================================================================
-
-run-godot: _check-project ## Run Godot headless command (PROJECT=/path ARGS='...')
-	@./$(SCRIPT_DIR)/run-godot.sh "$(PROJECT_PATH)" $(ARGS)
-
-godot-version: _check-project ## Show Godot version
-	@./$(SCRIPT_DIR)/run-godot.sh "$(PROJECT_PATH)" --version
-
-godot-validate: _check-project ## Validate Godot project
-	@./$(SCRIPT_DIR)/run-godot.sh "$(PROJECT_PATH)" --validate-project
-
-godot-doctor: _check-project ## Run Godot project doctor
-	@./$(SCRIPT_DIR)/run-godot.sh "$(PROJECT_PATH)" --doctor
 
 #==============================================================================
 # STAGING WORKFLOW
@@ -512,7 +512,7 @@ logs-dns: ## Follow DNS filter logs only
 logs-proxy: ## Follow all proxy logs
 	@cd $(COMPOSE_DIR) && docker compose -f compose.base.yml logs -f \
 		proxy_github proxy_raw_githubusercontent proxy_codeload_github \
-		proxy_godot_docs proxy_anthropic_api
+		proxy_anthropic_api proxy_github_api
 
 logs-report: ## Generate network activity report
 	@./$(SCRIPT_DIR)/logs-report.sh
@@ -535,9 +535,8 @@ clean-all: down-volumes clean ## Stop services, remove volumes and logs
 	@echo "Done."
 
 clean-images: ## Remove agent images
-	@echo "Removing claude-godot-agent images..."
-	@docker rmi claude-godot-agent:latest 2>/dev/null || true
-	@docker rmi claude-godot-agent:godot-$(GODOT_VERSION)-$(GODOT_RELEASE_TYPE) 2>/dev/null || true
+	@echo "Removing sapphire-bee images..."
+	@docker rmi sapphire-bee:latest 2>/dev/null || true
 	@echo "Done."
 
 #==============================================================================
@@ -750,12 +749,11 @@ p: pool-status
 ps: pool-start
 px: pool-stop
 pl: pool-logs
+plw: pool-logs-worker
 
 # Print configuration
 config: ## Show current configuration
 	@echo "Configuration:"
-	@echo "  GODOT_VERSION:      $(GODOT_VERSION)"
-	@echo "  GODOT_RELEASE_TYPE: $(GODOT_RELEASE_TYPE)"
 	@echo "  PROJECT_PATH:       $(if $(PROJECT_PATH),$(PROJECT_PATH),(not set))"
 	@echo "  STAGING_PATH:       $(if $(STAGING_PATH),$(STAGING_PATH),(not set))"
 	@echo "  LIVE_PATH:          $(if $(LIVE_PATH),$(LIVE_PATH),(not set))"

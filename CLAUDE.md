@@ -1,11 +1,11 @@
-# Claude Code Context for godot-agent
+# Claude Code Context for Sapphire Bee
 
-This repository provides a secure, sandboxed Docker environment for running Claude Code with Godot game development projects.
+This repository provides a secure, sandboxed Docker environment for running Claude Code with any development projects.
 
 ## Project Purpose
 
 The sandbox isolates Claude Code in a container with:
-- **Network allowlisting**: Only GitHub, Godot docs, and Anthropic API are accessible
+- **Network allowlisting**: Only GitHub and Anthropic API are accessible
 - **Filesystem isolation**: Only the mounted project directory is writable
 - **Security hardening**: Read-only rootfs, dropped capabilities, resource limits
 
@@ -13,7 +13,7 @@ This protects against Claude accidentally (or maliciously) accessing sensitive d
 
 **Permissions**: Claude Code runs with all permissions pre-granted (file edits, command execution, etc.) since security is enforced by the container sandbox, not by Claude's internal permission system. See `image/config/claude-settings.json` for the full list.
 
-## ⚠️ Two Contexts: Host vs Sandboxed Agent
+## Two Contexts: Host vs Sandboxed Agent
 
 This file (`CLAUDE.md`) documents **host-side operations** - commands run on the developer's machine to manage the sandbox infrastructure.
 
@@ -34,7 +34,7 @@ Or see `image/config/sandbox-context.md` in this repo for the full reference.
 
 When running inside the container, **do NOT use `gh` CLI** for GitHub operations. Instead use MCP tools:
 
-| Task | ❌ Don't Use | ✅ Use Instead |
+| Task | Don't Use | Use Instead |
 |------|-------------|----------------|
 | List issues | `gh issue list` | `list_issues` MCP tool |
 | Create issue | `gh issue create` | `create_issue` MCP tool |
@@ -46,16 +46,16 @@ When running inside the container, **do NOT use `gh` CLI** for GitHub operations
 
 **Git CLI is fine for local operations:**
 ```bash
-git status          # ✅ OK
-git add .           # ✅ OK  
-git commit -m "..."  # ✅ OK
-git checkout -b ...  # ✅ OK
-git push            # ⚠️ Use MCP push_files if git push fails
+git status          # OK
+git add .           # OK
+git commit -m "..."  # OK
+git checkout -b ...  # OK
+git push            # Use MCP push_files if git push fails
 ```
 
 ## Contents
 
-- [Two Contexts: Host vs Sandboxed Agent](#️-two-contexts-host-vs-sandboxed-agent)
+- [Two Contexts: Host vs Sandboxed Agent](#two-contexts-host-vs-sandboxed-agent)
 - [Pre-built Image](#pre-built-image)
 - [Skills](#skills)
   - [First-Time Setup](#skill-first-time-setup)
@@ -64,6 +64,7 @@ git push            # ⚠️ Use MCP push_files if git push fails
   - [Non-Interactive / Automation](#skill-non-interactive--automation-mode)
   - [One-shot Mode](#skill-running-claude-in-the-sandbox-one-shot-mode)
   - [Daily Workflows](#skill-daily-workflow-persistent-mode)
+  - [Pool Mode](#skill-pool-mode-multi-worker-issue-processing)
   - [Queue Mode](#skill-queue-mode-async-task-processing)
   - [Emergency Recovery](#skill-emergency-recovery)
   - [Updating to Latest Image](#skill-updating-to-latest-image)
@@ -71,10 +72,8 @@ git push            # ⚠️ Use MCP push_files if git push fails
   - [Before Committing](#skill-before-committing-changes)
   - [Security Scanning](#skill-scanning-for-security-issues)
   - [Staging Mode](#skill-working-with-staging-mode)
-  - [Running Godot](#skill-running-godot-commands)
   - [Security Tests](#skill-running-security-tests)
   - [Testing CI Locally](#skill-testing-ci-locally)
-  - [Building with Different Godot Versions](#skill-building-with-different-godot-versions)
   - [Adding a New Allowed Domain](#skill-adding-a-new-allowed-domain)
   - [Sandboxed Agent Workflows](#skill-sandboxed-agent-workflows)
 - [Repository Structure](#repository-structure)
@@ -90,7 +89,6 @@ git push            # ⚠️ Use MCP push_files if git push fails
   - [#4: CI Test Project Permissions](#critical-issue-4-ci-test-project-permissions)
   - [#5: Prefer Pre-built Image](#critical-issue-5-prefer-pre-built-image-over-local-builds)
   - [#6: Claude Config Files (MCP vs Settings)](#critical-issue-6-claude-configuration-files-mcp-vs-settings)
-  - [#7: Godot Download URLs](#critical-issue-7-godot-download-urls)
 
 ---
 
@@ -98,7 +96,7 @@ git push            # ⚠️ Use MCP push_files if git push fails
 
 The agent image is automatically built and pushed to GitHub Container Registry:
 ```text
-ghcr.io/sapphirebeehivestudios/claude-godot-agent
+ghcr.io/sapphirebeehivestudios/sapphire-bee
 ```
 
 ### Available Tags
@@ -106,7 +104,6 @@ ghcr.io/sapphirebeehivestudios/claude-godot-agent
 | Tag | Example | Description |
 |-----|---------|-------------|
 | `latest` | `:latest` | Most recent build from main branch |
-| `godot-X.Y-TYPE` | `:godot-4.6-beta2` | Tagged by Godot version + release type |
 | `claude-X.Y.Z` | `:claude-2.0.76` | Tagged by Claude Code version |
 | `YYYYMMDD` | `:20250102` | Tagged by build date |
 | `sha-XXXXXX` | `:sha-a1b2c3d` | Tagged by git commit SHA |
@@ -146,9 +143,8 @@ make auth
 make install-hooks
 
 # 5. Get the agent image (pull pre-built - faster than building locally)
-docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
+docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
+docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
 
 # 5a. (Optional) Build locally only if modifying the Dockerfile
 # make build
@@ -175,7 +171,7 @@ gh release create v1.0.0
 
 #### Sandboxed Agent (Inside Container) - MCP Only
 
-**⚠️ The sandboxed agent uses MCP tools exclusively for GitHub operations.**
+**The sandboxed agent uses MCP tools exclusively for GitHub operations.**
 
 No `gh` CLI. No PAT. MCP tools are pre-authenticated via GitHub App.
 
@@ -183,7 +179,7 @@ No `gh` CLI. No PAT. MCP tools are pre-authenticated via GitHub App.
 # List issues
 Use list_issues with owner and repo parameters
 
-# Create an issue  
+# Create an issue
 Use create_issue with owner, repo, title, body
 
 # Create a PR
@@ -207,18 +203,18 @@ Use push_files with owner, repo, branch, files, message
 
 **Git CLI is fine for local operations:**
 ```bash
-git status          # ✅ OK
-git add .           # ✅ OK  
-git commit -m "..."  # ✅ OK
-git checkout -b ...  # ✅ OK
-git log             # ✅ OK
+git status          # OK
+git add .           # OK
+git commit -m "..."  # OK
+git checkout -b ...  # OK
+git log             # OK
 # For remote operations (push, PR) → use MCP tools
 ```
 
 **Branch Protection (enabled automatically):**
-- ⛔ Direct pushes to `main`/`master` are **blocked** by pre-push hook
-- ✅ Clone script automatically creates a `claude/work-*` branch
-- ✅ Force pushes and branch deletions are disabled
+- Direct pushes to `main`/`master` are **blocked** by pre-push hook
+- Clone script automatically creates a `claude/work-*` branch
+- Force pushes and branch deletions are disabled
 - Use MCP `create_pull_request` to merge changes
 
 **GitHub App Setup (Required for Sandbox):**
@@ -237,7 +233,7 @@ Persistent mode keeps the agent running for quick iterations:
 
 ```bash
 # Start persistent agent (infrastructure + agent container)
-make up-agent PROJECT=/path/to/godot/project
+make up-agent PROJECT=/path/to/your/project
 
 # Run Claude commands instantly (no startup delay)
 make claude                          # Interactive session
@@ -260,10 +256,10 @@ For running Claude from scripts, CI/CD pipelines, or other automation contexts:
 
 ```bash
 # Print mode - outputs result without interactive prompts
-make claude-print P="List all .gd files in this project"
+make claude-print P="List all files in this project"
 
 # Or use the script directly with --print flag
-./scripts/claude-exec.sh --print "Generate a player script"
+./scripts/claude-exec.sh --print "Generate a helper script"
 
 # TTY auto-detection: the script automatically detects if a TTY is available
 # and adjusts behavior accordingly (no -it flags when running non-interactively)
@@ -285,13 +281,13 @@ For ephemeral sessions that don't persist context:
 
 ```bash
 # Direct mode - Claude can modify files immediately
-make run-direct PROJECT=/path/to/godot/project
+make run-direct PROJECT=/path/to/your/project
 
 # Staging mode - Safer, changes go to staging directory first
 make run-staging STAGING=/path/to/staging
 
 # Offline mode - No network access at all
-make run-offline PROJECT=/path/to/godot/project
+make run-offline PROJECT=/path/to/your/project
 ```
 
 ### Skill: Daily Workflow (Persistent Mode)
@@ -300,12 +296,12 @@ Recommended daily workflow using persistent agent:
 
 ```bash
 # Start your day - bring up persistent agent
-make up-agent PROJECT=~/my-game
+make up-agent PROJECT=~/my-project
 
 # Throughout the day, quick Claude interactions
 make claude P="What's the structure of this project?"
-make claude P="Add player movement to player.gd"
-make claude P="Fix the bug in collision.gd"
+make claude P="Add a new feature to the main module"
+make claude P="Fix the bug in the helper function"
 
 # For longer conversations
 make claude
@@ -329,11 +325,44 @@ make up
 make status
 
 # Run Claude with your project
-make run-direct PROJECT=~/my-game
+make run-direct PROJECT=~/my-project
 
 # When done - shut down services
 make down
 ```
+
+### Skill: Pool Mode (Multi-Worker Issue Processing)
+
+Process GitHub issues with multiple isolated workers:
+
+```bash
+# Start worker pool with N workers
+make pool-start REPO=owner/repo WORKERS=3
+
+# Monitor all workers
+make pool-logs
+
+# Monitor specific worker by ID
+make pool-logs-worker WORKER=1
+# or
+make pool-logs-worker WORKER=worker-1
+
+# Check pool status
+make pool-status
+
+# Scale the pool
+make pool-scale WORKERS=5
+
+# Stop the pool
+make pool-stop
+```
+
+Worker pool features:
+- Each worker has its own isolated workspace (Docker volume)
+- Workers clone the repository on startup
+- Workers poll GitHub for issues labeled with `agent-ready` (configurable)
+- Workers claim issues, create branches, implement solutions, and open PRs
+- Workers continue to the next issue after completing their current task
 
 ### Skill: Queue Mode (Async Task Processing)
 
@@ -341,25 +370,25 @@ Process tasks asynchronously while you're away:
 
 ```bash
 # Start the queue processor daemon
-make queue-start PROJECT=~/my-game
+make queue-start PROJECT=~/my-project
 
 # Add tasks to the queue
-make queue-add TASK="Add player movement" NAME=001-movement PROJECT=~/my-game
-make queue-add TASK="Add enemy AI" NAME=002-enemies PROJECT=~/my-game
-make queue-add TASK="Create main menu" NAME=003-menu PROJECT=~/my-game
+make queue-add TASK="Add feature X" NAME=001-feature PROJECT=~/my-project
+make queue-add TASK="Fix bug Y" NAME=002-bugfix PROJECT=~/my-project
+make queue-add TASK="Refactor module Z" NAME=003-refactor PROJECT=~/my-project
 
 # Or drop files directly
-echo "Add a health bar UI" > ~/my-game/.claude/queue/004-health.md
+echo "Add a helper utility" > ~/my-project/.claude/queue/004-helper.md
 
 # Check queue status
-make queue-status PROJECT=~/my-game
+make queue-status PROJECT=~/my-project
 
 # Watch the processor work
 make queue-logs
 
 # View results
-make queue-results PROJECT=~/my-game
-cat ~/my-game/.claude/results/001-movement.log
+make queue-results PROJECT=~/my-project
+cat ~/my-project/.claude/results/001-feature.log
 
 # Stop when done
 make queue-stop
@@ -369,7 +398,7 @@ Queue directory structure:
 ```text
 /project/.claude/
 ├── queue/           # Drop task files here
-├── processing/      # Currently being processed  
+├── processing/      # Currently being processed
 ├── completed/       # Successfully completed
 ├── failed/          # Failed tasks
 └── results/         # Execution logs
@@ -377,13 +406,11 @@ Queue directory structure:
 
 **Task file format:** Plain text with the prompt for Claude:
 ```text
-# Example: 001-movement.md
-Add player movement with WASD controls.
-
-Requirements:
-- Use CharacterBody3D
-- 10 units/second walk speed  
-- Sprint with Shift key (2x speed)
+# Example: 001-feature.md
+Add a new feature with the following requirements:
+- Implement the main functionality
+- Add error handling
+- Write tests
 ```
 The filename becomes the task identifier in results.
 
@@ -404,8 +431,8 @@ docker ps -a | grep -E "(sandbox|proxy|dns|agent)"  # Should be empty
 docker network ls | grep sandbox  # Should be empty
 
 # Fresh start
-docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
+docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
 make up
 ```
 
@@ -415,18 +442,16 @@ When a new version of the agent image is released:
 
 ```bash
 # Pull latest from registry
-docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
 
 # Re-tag for local use
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
+docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
 
 # If using persistent agent, restart it
 make down-agent
 make up-agent PROJECT=/path/to/project
 
 # Verify new version
-docker exec agent godot --version
 docker exec agent claude --version
 ```
 
@@ -478,7 +503,7 @@ After Claude modifies a project, scan for dangerous patterns:
 
 ```bash
 # Scan a project directory
-make scan PROJECT=/path/to/godot/project
+make scan PROJECT=/path/to/project
 
 # Or use the script directly for more options
 ./scripts/scan-dangerous.sh /path/to/project
@@ -490,37 +515,19 @@ Safer workflow using staging:
 
 ```bash
 # 1. Create staging directory
-mkdir -p ~/godot-staging
+mkdir -p ~/staging
 
 # 2. Run Claude in staging mode
-make run-staging STAGING=~/godot-staging
+make run-staging STAGING=~/staging
 
 # 3. Review what changed
-make diff-review STAGING=~/godot-staging LIVE=~/my-game
+make diff-review STAGING=~/staging LIVE=~/my-project
 
 # 4. If satisfied, promote changes
-make promote STAGING=~/godot-staging LIVE=~/my-game
+make promote STAGING=~/staging LIVE=~/my-project
 
 # 4a. Or do a dry-run first
-make promote-dry-run STAGING=~/godot-staging LIVE=~/my-game
-```
-
-### Skill: Running Godot Commands
-
-Run Godot headless inside the sandbox:
-
-```bash
-# Check Godot version
-make godot-version PROJECT=~/my-game
-
-# Validate project structure
-make godot-validate PROJECT=~/my-game
-
-# Run project doctor
-make godot-doctor PROJECT=~/my-game
-
-# Run arbitrary Godot commands
-make run-godot PROJECT=~/my-game ARGS="--export-release Linux build/game"
+make promote-dry-run STAGING=~/staging LIVE=~/my-project
 ```
 
 ### Skill: Running Security Tests
@@ -563,7 +570,7 @@ make test-offline      # Offline mode tests
 
 | Test Module | Verifies |
 |-------------|----------|
-| `test_dns_filtering.py` | Allowed domains → proxy IPs, blocked → NXDOMAIN |
+| `test_dns_filtering.py` | Allowed domains -> proxy IPs, blocked -> NXDOMAIN |
 | `test_network_restrictions.py` | Agent isolated to sandbox_net, cannot reach internet |
 | `test_container_hardening.py` | Read-only rootfs, dropped caps, non-root user, limits |
 | `test_filesystem_restrictions.py` | Only /project mounted, no sensitive paths |
@@ -609,27 +616,6 @@ make ci-validate    # Linting and validation only
 make ci-build       # Build test only
 ```
 
-### Skill: Building with Different Godot Versions
-
-The default is Godot 4.6 beta2. To build with a different version:
-
-```bash
-# Build with specific version and release type
-make build GODOT_VERSION=4.5 GODOT_RELEASE_TYPE=stable
-
-# Build with a release candidate
-make build GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=rc1
-
-# Force rebuild without cache
-make build-no-cache GODOT_VERSION=4.6 GODOT_RELEASE_TYPE=beta2
-```
-
-**Checksum verification is automatic** - the fetch script downloads Godot's official `SHA512-SUMS.txt` and verifies the correct checksum for each architecture.
-
-**Architecture**: The fetch script auto-detects architecture:
-- Apple Silicon (M1/M2/M3): Downloads `linux.arm64` binary
-- Intel/AMD: Downloads `linux.x86_64` binary
-
 ### Skill: Adding a New Allowed Domain
 
 To allow the sandbox to access a new domain:
@@ -653,6 +639,8 @@ To allow the sandbox to access a new domain:
    make restart
    ```
 
+See `configs/nginx/proxy_example.conf.template` for a template.
+
 ### Skill: Sandboxed Agent Workflows
 
 When Claude runs **inside the sandbox container**, it operates as an autonomous agent with specific workflows for handling tasks. The complete reference is in `image/config/sandbox-context.md`.
@@ -672,7 +660,7 @@ When Claude runs **inside the sandbox container**, it operates as an autonomous 
 2. CLAIM   → Use create_issue_comment to claim the issue
 3. BRANCH  → git checkout -b claude/issue-N-description
 4. CODE    → Implement the solution + write tests
-5. TEST    → godot --headless -s res://tests/test_runner.gd
+5. TEST    → Run project tests
 6. PUSH    → Use push_files or git push
 7. PR      → Use create_pull_request MCP tool
 8. WAIT    → Do NOT merge. Human reviews and merges.
@@ -689,12 +677,6 @@ When Claude runs **inside the sandbox container**, it operates as an autonomous 
 #### Quick Reference for Sandboxed Agents
 
 ```bash
-# Validate project
-godot --headless --validate-project
-
-# Run tests
-godot --headless -s res://tests/test_runner.gd
-
 # Create branch
 git checkout -b claude/issue-42-feature-name
 
@@ -709,7 +691,7 @@ For the full sandboxed agent context, see `image/config/sandbox-context.md`.
 ## Repository Structure
 
 ```text
-godot-agent/
+sapphire-bee/
 ├── compose/                 # Docker Compose configurations
 │   ├── compose.base.yml     # Infrastructure: DNS filter + proxy services
 │   ├── compose.direct.yml   # Agent with direct project mount (one-shot)
@@ -727,7 +709,7 @@ godot-agent/
 │   ├── Dockerfile           # Agent container image
 │   ├── config/
 │   │   └── claude-settings.json  # Claude Code permissions (all granted)
-│   ├── install/             # Installation scripts for Godot and Claude Code
+│   ├── install/             # Installation scripts for Claude Code
 │   └── scripts/
 │       ├── entrypoint.sh    # Container entrypoint (sets up Claude config)
 │       └── queue-watcher.js # Async task queue processor
@@ -817,6 +799,13 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make agent-status` | Check if agent is running |
 | `make claude-shell` | Open bash shell in agent |
 | `make down-agent` | Stop persistent agent |
+| **Pool Mode (Multi-Worker)** | |
+| `make pool-start REPO=... WORKERS=...` | Start worker pool |
+| `make pool-status` | Show worker pool status |
+| `make pool-logs` | Follow all worker logs |
+| `make pool-logs-worker WORKER=...` | Follow specific worker logs |
+| `make pool-scale WORKERS=...` | Scale worker pool |
+| `make pool-stop` | Stop worker pool |
 | **Queue Mode (Async)** | |
 | `make queue-start PROJECT=...` | Start queue processor daemon |
 | `make queue-add TASK="..." NAME=...` | Add task to queue |
@@ -850,6 +839,11 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make q` | `make queue-status` |
 | `make qs` | `make queue-start` |
 | `make qx` | `make queue-stop` |
+| `make p` | `make pool-status` |
+| `make ps` | `make pool-start` |
+| `make px` | `make pool-stop` |
+| `make pl` | `make pool-logs` |
+| `make plw` | `make pool-logs-worker` |
 
 ## Authentication
 
@@ -945,9 +939,8 @@ When initializing this repo from scratch, follow this exact sequence:
 3. **Verify authentication**: `make auth` (token should be in `.env`)
 4. **Pull pre-built image** (skip building locally):
    ```bash
-   docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
-   docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
-   docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:4.6
+   docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
+   docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
    ```
 5. **Start infrastructure**: `./scripts/up.sh`
 6. **Verify services**: `make status`
@@ -969,7 +962,7 @@ proxy_github:
   volumes:
     - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     - ../configs/nginx/proxy_github.conf:/etc/nginx/conf.d/stream.conf:ro
-    - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro  # ← Add this
+    - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro  # Add this
 ```
 
 Create `configs/nginx/empty.conf`:
@@ -977,7 +970,7 @@ Create `configs/nginx/empty.conf`:
 echo '# Empty file to prevent default nginx HTTP config' > configs/nginx/empty.conf
 ```
 
-**Apply to all 5 proxy services**: `proxy_github`, `proxy_raw_githubusercontent`, `proxy_codeload_github`, `proxy_godot_docs`, `proxy_anthropic_api`
+**Apply to all proxy services**: `proxy_github`, `proxy_raw_githubusercontent`, `proxy_codeload_github`, `proxy_anthropic_api`
 
 ### Critical Issue #2: CoreDNS Configuration
 
@@ -1016,7 +1009,7 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 
 **Problem**: Tests using `nslookup`, `wget`, `curl`, `ping`, or `ip` fail with "command not found"
 
-**Root Cause**: The agent container only has essential tools: bash, git, nodejs, npm, and Godot. No network diagnostic utilities.
+**Root Cause**: The agent container only has essential tools: bash, git, nodejs, npm. No network diagnostic utilities.
 
 **Solution**: Use Node.js for network tests:
 
@@ -1063,11 +1056,11 @@ socket.connect(80, '8.8.8.8', () => console.log('CONNECTED'));
 
 ```bash
 # Do this:
-docker pull ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest
-docker tag ghcr.io/sapphirebeehivestudios/claude-godot-agent:latest claude-godot-agent:latest
+docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
+docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
 
 # Not this:
-make build  # ← Only needed if modifying the Dockerfile
+make build  # Only needed if modifying the Dockerfile
 ```
 
 The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on push to main.
@@ -1086,10 +1079,10 @@ The CI/CD pipeline builds multi-arch images (amd64 + arm64) automatically on pus
 **Solution**: Always configure MCP servers in `~/.claude.json`, NOT in `~/.claude/settings.json`:
 
 ```bash
-# ✅ Correct: Check MCP servers in ~/.claude.json
+# Correct: Check MCP servers in ~/.claude.json
 cat ~/.claude.json | jq .mcpServers
 
-# ❌ Wrong: settings.json doesn't have MCP servers
+# Wrong: settings.json doesn't have MCP servers
 cat ~/.claude/settings.json | jq .mcpServers  # Returns null
 ```
 
@@ -1101,11 +1094,11 @@ Despite its name, this is NOT a personal access token. The GitHub MCP server use
 - **FOR MCP TOOLS ONLY** - never extract this for `gh` CLI or other uses
 
 ```bash
-# ❌ NEVER do this - token is for MCP only, not gh CLI
+# NEVER do this - token is for MCP only, not gh CLI
 export GH_TOKEN=$(cat ~/.claude.json | jq -r '.mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN')
 gh issue list  # Don't hijack the MCP token!
 
-# ✅ Instead, just use MCP tools - they handle auth automatically
+# Instead, just use MCP tools - they handle auth automatically
 # Use list_issues, create_pull_request, etc.
 ```
 
@@ -1113,37 +1106,13 @@ gh issue list  # Don't hijack the MCP token!
 
 **Verification**: Use `/opt/scripts/verify-mcp.sh` inside the container to confirm MCP is properly configured.
 
-### Critical Issue #7: Godot Download URLs
-
-**Problem**: Godot beta/rc/dev releases return 404 from `github.com/godotengine/godot`
-
-**Root Cause**: Godot uses **two separate GitHub repos** for releases:
-- `godotengine/godot` - **stable releases only**
-- `godotengine/godot-builds` - **all releases** (stable, beta, rc, dev)
-
-**Correct URLs**:
-```bash
-# Stable releases (both work):
-https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
-https://github.com/godotengine/godot-builds/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
-
-# Pre-releases (ONLY godot-builds):
-https://github.com/godotengine/godot-builds/releases/download/4.6-beta2/Godot_v4.6-beta2_linux.x86_64.zip
-```
-
-**TuxFamily** (`downloads.tuxfamily.org`) is an alternative mirror but often slower/less reliable.
-
-The `fetch_godot.sh` script now auto-detects architecture and tries GitHub first:
-- `linux.x86_64` for Intel/AMD
-- `linux.arm64` for Apple Silicon (M1/M2/M3)
-
 ### Restart Services After Config Changes
 
 After editing any `compose/*.yml` files or `configs/` files:
 
 ```bash
 # Full path needed if not in repo root
-cd /Users/williamdawson/development/godot-agent
+cd /Users/williamdawson/development/sapphire-bee
 ./scripts/down.sh
 ./scripts/up.sh
 ```
@@ -1160,10 +1129,10 @@ Some commands require being in the repository root:
 - Direct script execution needs full path or `cd` first:
   ```bash
   # Either:
-  cd /Users/williamdawson/development/godot-agent && ./scripts/up.sh
+  cd /Users/williamdawson/development/sapphire-bee && ./scripts/up.sh
 
   # Or:
-  /Users/williamdawson/development/godot-agent/scripts/up.sh
+  /Users/williamdawson/development/sapphire-bee/scripts/up.sh
   ```
 
 ### Verifying Successful Initialization
@@ -1172,13 +1141,12 @@ All these should be true:
 
 ```bash
 # 1. Image exists locally
-docker images | grep claude-godot-agent
-# Should show: claude-godot-agent  latest  ...
-#              claude-godot-agent  4.6     ...
+docker images | grep sapphire-bee
+# Should show: sapphire-bee  latest  ...
 
-# 2. All 6 services running
+# 2. All 5 services running
 make status
-# Should show 6 containers: dnsfilter + 5 proxies, all "Up"
+# Should show 5 containers: dnsfilter + 4 proxies, all "Up"
 
 # 3. Proxies are healthy (may take 30s for healthchecks)
 make status | grep healthy
@@ -1205,7 +1173,6 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 │  10.100.1.10  proxy_github        ◄──────────┤           │
 │  10.100.1.11  proxy_raw_githubusercontent   │           │
 │  10.100.1.12  proxy_codeload_github          │           │
-│  10.100.1.13  proxy_godot_docs               │           │
 │  10.100.1.14  proxy_anthropic_api            │           │
 │         │                                                │
 └─────────┼────────────────────────────────────────────────┘
@@ -1216,7 +1183,7 @@ docker compose -f compose/compose.base.yml logs dnsfilter
 
 - Agent can only reach IPs on `sandbox_net`
 - DNS filter returns proxy IPs for allowed domains, NXDOMAIN for everything else
-- Proxies bridge `sandbox_net` ↔ `egress_net` ↔ Internet
+- Proxies bridge `sandbox_net` <-> `egress_net` <-> Internet
 - Agent cannot reach egress_net directly
 
 ### Expected Service States
@@ -1229,7 +1196,6 @@ After successful `make up`:
 | proxy_github | Up (healthy) | Has healthcheck with nginx -t |
 | proxy_raw_githubusercontent | Up | No healthcheck configured |
 | proxy_codeload_github | Up | No healthcheck configured |
-| proxy_godot_docs | Up | No healthcheck configured |
 | proxy_anthropic_api | Up | No healthcheck configured |
 
 Only `proxy_github` has a healthcheck (`nginx -t`). Others are simple enough that if they're running, they work.
