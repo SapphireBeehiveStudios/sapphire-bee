@@ -176,6 +176,106 @@ services:
       - no-new-privileges:true
 
   # ===========================================
+  # Proxy: proxy.golang.org (Go module proxy)
+  # ===========================================
+  proxy_golang:
+    image: nginx:1.25-alpine
+    container_name: proxy_golang
+    restart: unless-stopped
+    volumes:
+      - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../configs/nginx/proxy_golang.conf:/etc/nginx/conf.d/stream.conf:ro
+      - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.20
+      egress_net:
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================
+  # Proxy: sum.golang.org (Go checksum database)
+  # ===========================================
+  proxy_golang_sum:
+    image: nginx:1.25-alpine
+    container_name: proxy_golang_sum
+    restart: unless-stopped
+    volumes:
+      - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../configs/nginx/proxy_golang_sum.conf:/etc/nginx/conf.d/stream.conf:ro
+      - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.21
+      egress_net:
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================
+  # Proxy: pypi.org (Python Package Index)
+  # ===========================================
+  proxy_pypi:
+    image: nginx:1.25-alpine
+    container_name: proxy_pypi
+    restart: unless-stopped
+    volumes:
+      - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../configs/nginx/proxy_pypi.conf:/etc/nginx/conf.d/stream.conf:ro
+      - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.22
+      egress_net:
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================
+  # Proxy: files.pythonhosted.org (Python packages)
+  # ===========================================
+  proxy_pythonhosted:
+    image: nginx:1.25-alpine
+    container_name: proxy_pythonhosted
+    restart: unless-stopped
+    volumes:
+      - ../configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../configs/nginx/proxy_pythonhosted.conf:/etc/nginx/conf.d/stream.conf:ro
+      - ../configs/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      sandbox_net:
+        ipv4_address: 10.100.1.23
+      egress_net:
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+
+  # ===========================================
   # Example: Custom documentation proxy
   # ===========================================
   # To add a custom documentation site:

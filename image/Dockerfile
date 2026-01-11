@@ -31,8 +31,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     file \
     make \
-    # Python for GitHub App token generation
+    # Python for GitHub App token generation and testing
     python3 \
+    python3-pip \
+    python3-venv \
+    # Go for building and testing Go services
+    golang-go \
+    # Build essentials for compiling dependencies
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for Python package management (faster than pip)

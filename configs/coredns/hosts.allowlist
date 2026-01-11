@@ -20,6 +20,14 @@
 # Anthropic API (for Claude Code)
 10.100.1.14 api.anthropic.com
 
+# Go module proxy (for go get, go mod download)
+10.100.1.20 proxy.golang.org
+10.100.1.21 sum.golang.org
+
+# Python Package Index (for pip install)
+10.100.1.22 pypi.org
+10.100.1.23 files.pythonhosted.org
+
 # Note: These IPs are static assignments within the sandbox_net
 # They must match the ipv4_address settings in compose.base.yml
 # Also: Domains must be listed in the Corefile server block
