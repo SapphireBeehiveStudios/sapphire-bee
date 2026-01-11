@@ -49,6 +49,11 @@ let tokenExpiry = 0;
 // Claim verification delay (ms) - wait for other workers to potentially claim
 const CLAIM_VERIFICATION_DELAY = 3000;
 
+// Claim timeout (ms) - claims older than this are considered stale/abandoned
+// If a worker posted a claim but crashed/restarted before adding in-progress label,
+// the claim becomes stale and should be ignored by other workers
+const CLAIM_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Log with worker prefix
  */
@@ -310,9 +315,22 @@ async function claimIssue(issue) {
         return false;
     }
     
-    // Filter for CLAIM comments and sort by creation time (server timestamp)
+    // Filter for CLAIM comments, exclude stale ones, and sort by creation time
+    const now = Date.now();
     const claims = commentsResponse.data
-        .filter(c => c.body && c.body.startsWith('CLAIM:'))
+        .filter(c => {
+            if (!c.body || !c.body.startsWith('CLAIM:')) return false;
+
+            // Check if claim is stale (older than CLAIM_TIMEOUT)
+            const claimAge = now - new Date(c.created_at).getTime();
+            if (claimAge > CLAIM_TIMEOUT) {
+                const staleWorkerId = c.body.split(':')[1] || 'unknown';
+                log(`Ignoring stale claim from worker ${staleWorkerId} (age: ${Math.round(claimAge / 1000)}s)`);
+                return false;
+            }
+
+            return true;
+        })
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     
     // Step 5: Check if our claim was first
