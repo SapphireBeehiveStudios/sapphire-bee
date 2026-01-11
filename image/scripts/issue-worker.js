@@ -443,40 +443,75 @@ Instructions:
 When you're done, summarize what you changed.`;
 
     log(`Running Claude on issue #${issue.number}...`);
-    
+
     // Refresh MCP token before running Claude (in case it expired)
     await refreshMcpToken();
-    
+
+    // Set up log file for this conversation
+    const logDir = '/pool-logs';
+    const logFile = path.join(logDir, `worker-${WORKER_ID}-issue-${issue.number}-${Date.now()}.log`);
+    let logStream = null;
+
+    // Create log directory if it exists (mounted volume)
+    if (fs.existsSync(logDir)) {
+        try {
+            logStream = fs.createWriteStream(logFile, { flags: 'a' });
+            logStream.write(`\n${'═'.repeat(70)}\n`);
+            logStream.write(`Worker: ${WORKER_ID}\n`);
+            logStream.write(`Issue: #${issue.number} - ${issue.title}\n`);
+            logStream.write(`Started: ${new Date().toISOString()}\n`);
+            logStream.write(`${'═'.repeat(70)}\n\n`);
+            log(`Logging conversation to: ${logFile}`);
+        } catch (err) {
+            log(`Warning: Failed to create log file: ${err.message}`);
+        }
+    }
+
     return new Promise((resolve) => {
         const claude = spawn('claude', [
-            '--print',
             '--dangerously-skip-permissions',
             '--no-session-persistence',  // Fresh context for each issue
             prompt
         ], {
             cwd: PROJECT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, TERM: 'dumb' }
+            env: { ...process.env, TERM: 'xterm-256color' }  // Better terminal support
         });
-        
+
         let output = '';
-        
+
         claude.stdout.on('data', (data) => {
             const text = data.toString();
+            // Write to stdout (captured by Docker logs)
             process.stdout.write(text);
+            // Write to log file (persistent)
+            if (logStream) logStream.write(text);
             output += text;
         });
-        
+
         claude.stderr.on('data', (data) => {
-            process.stderr.write(data.toString());
+            const text = data.toString();
+            process.stderr.write(text);
+            if (logStream) logStream.write(`[STDERR] ${text}`);
         });
-        
+
         claude.on('close', (code) => {
+            if (logStream) {
+                logStream.write(`\n\n${'═'.repeat(70)}\n`);
+                logStream.write(`Finished: ${new Date().toISOString()}\n`);
+                logStream.write(`Exit code: ${code}\n`);
+                logStream.write(`${'═'.repeat(70)}\n`);
+                logStream.end();
+            }
             resolve({ success: code === 0, output });
         });
-        
+
         claude.on('error', (err) => {
             log(`Failed to run Claude: ${err.message}`);
+            if (logStream) {
+                logStream.write(`\nERROR: ${err.message}\n`);
+                logStream.end();
+            }
             resolve({ success: false, output: err.message });
         });
     });

@@ -423,8 +423,10 @@ pool-start: _check-repo _check-auth ## Start worker pool (REPO=owner/repo WORKER
 	@echo ""
 	@echo "Commands:"
 	@echo "  make pool-status                  - Show worker status"
-	@echo "  make pool-logs                    - Follow all worker logs"
+	@echo "  make pool-logs                    - Follow all worker logs (Docker output)"
+	@echo "  make pool-logs-files              - Follow conversation logs (file-based)"
 	@echo "  make pool-logs-worker WORKER=1    - Follow logs for specific worker"
+	@echo "  make pool-cleanup-claims REPO=... - Clean up stale claim comments"
 	@echo "  make pool-add-workers WORKERS=2   - Add 2 workers without interrupting existing ones"
 	@echo "  make pool-scale WORKERS=5         - Scale to 5 workers (INTERRUPTS existing workers)"
 	@echo "  make pool-stop                    - Stop all workers"
@@ -433,6 +435,15 @@ pool-stop: ## Stop worker pool
 	@echo "Stopping worker pool..."
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml down -v
 	@echo "Worker pool stopped and workspaces destroyed."
+
+pool-cleanup-claims: ## Clean up stale claim comments (REPO=owner/repo required)
+ifndef REPO
+	@echo "Error: REPO is required"
+	@echo "Usage: make pool-cleanup-claims REPO=owner/repo"
+	@echo "   or: make pool-cleanup-claims REPO=owner/repo ISSUE_LABEL=custom-label"
+	@exit 1
+endif
+	@$(PROJECT_ROOT)/scripts/pool-cleanup-claims.sh $(REPO) $(ISSUE_LABEL)
 
 pool-status: ## Show worker pool status
 	@echo "╔══════════════════════════════════════════════════════════════════════╗"
@@ -444,8 +455,20 @@ pool-status: ## Show worker pool status
 	@RUNNING=$$(docker ps --filter "name=compose-worker" --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' '); \
 	echo "Active workers: $$RUNNING"
 
-pool-logs: ## Follow worker pool logs
+pool-logs: ## Follow worker pool logs (Docker stdout/stderr)
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml logs -f worker
+
+pool-logs-files: ## Follow centralized pool log files (conversations)
+	@if [ ! -d "$(PROJECT_ROOT)/pool-logs" ]; then \
+		echo "Error: pool-logs directory does not exist"; \
+		echo "It will be created when workers start processing issues."; \
+		exit 1; \
+	fi
+	@echo "Following all worker conversation logs in pool-logs/..."
+	@tail -F $(PROJECT_ROOT)/pool-logs/*.log 2>/dev/null || \
+		(echo "No log files yet. Logs will appear when workers start processing issues." && \
+		 while [ ! -f $(PROJECT_ROOT)/pool-logs/*.log ]; do sleep 1; done && \
+		 tail -F $(PROJECT_ROOT)/pool-logs/*.log)
 
 pool-logs-worker: ## Follow logs for specific worker (WORKER=N or WORKER=worker-N)
 ifndef WORKER
@@ -753,7 +776,9 @@ p: pool-status
 ps: pool-start
 px: pool-stop
 pl: pool-logs
+plf: pool-logs-files
 plw: pool-logs-worker
+plc: pool-cleanup-claims
 
 # Print configuration
 config: ## Show current configuration
