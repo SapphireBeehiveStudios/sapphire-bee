@@ -12,7 +12,7 @@
         up-agent down-agent up-isolated down-isolated \
         claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
-        pool-start pool-stop pool-status pool-logs pool-logs-worker pool-scale \
+        pool-start pool-stop pool-status pool-logs pool-logs-worker pool-scale pool-add-workers \
         github-app-test github-app-validate
 
 # Default target
@@ -422,11 +422,12 @@ pool-start: _check-repo _check-auth ## Start worker pool (REPO=owner/repo WORKER
 	@echo "  4. Open PRs for completed work"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make pool-status               - Show worker status"
-	@echo "  make pool-logs                 - Follow all worker logs"
-	@echo "  make pool-logs-worker WORKER=1 - Follow logs for specific worker"
-	@echo "  make pool-scale WORKERS=5      - Scale to 5 workers"
-	@echo "  make pool-stop                 - Stop all workers"
+	@echo "  make pool-status                  - Show worker status"
+	@echo "  make pool-logs                    - Follow all worker logs"
+	@echo "  make pool-logs-worker WORKER=1    - Follow logs for specific worker"
+	@echo "  make pool-add-workers WORKERS=2   - Add 2 workers without interrupting existing ones"
+	@echo "  make pool-scale WORKERS=5         - Scale to 5 workers (INTERRUPTS existing workers)"
+	@echo "  make pool-stop                    - Stop all workers"
 
 pool-stop: ## Stop worker pool
 	@echo "Stopping worker pool..."
@@ -468,10 +469,13 @@ endif
 	echo "Following logs for $$CONTAINER_NAME..."; \
 	docker logs -f "$$CONTAINER_NAME"
 
-pool-scale: _check-auth ## Scale worker pool (WORKERS=N)
+pool-scale: _check-auth ## Scale worker pool (WORKERS=N) - WARNING: Interrupts existing workers
 	@echo "Scaling worker pool to $(WORKERS) workers..."
 	@cd $(COMPOSE_DIR) && docker compose --env-file ../.env -f compose.base.yml -f compose.pool.yml up -d --scale worker=$(WORKERS)
 	@echo "Pool scaled to $(WORKERS) workers."
+
+pool-add-workers: _check-auth ## Add workers without interrupting existing ones (WORKERS=N)
+	@./$(SCRIPT_DIR)/pool-add-workers.sh $(WORKERS)
 
 #==============================================================================
 # STAGING WORKFLOW
