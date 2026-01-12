@@ -14,6 +14,7 @@
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
         pool-start pool-stop pool-status pool-logs pool-logs-worker pool-scale pool-add-workers \
         pool-health pool-health-watch pool-health-restart \
+        pool-metrics pool-metrics-json pool-metrics-csv \
         github-app-test github-app-validate
 
 # Default target
@@ -509,6 +510,15 @@ pool-health-watch: ## Continuously monitor worker pool health
 
 pool-health-restart: ## Check health and auto-restart stuck workers
 	@./$(SCRIPT_DIR)/pool-health.sh --restart-stuck
+
+pool-metrics: ## Show worker pool metrics and statistics
+	@./$(SCRIPT_DIR)/pool-metrics.sh
+
+pool-metrics-json: ## Show metrics in JSON format
+	@./$(SCRIPT_DIR)/pool-metrics.sh --json
+
+pool-metrics-csv: ## Export metrics as CSV
+	@./$(SCRIPT_DIR)/pool-metrics.sh --csv
 
 #==============================================================================
 # STAGING WORKFLOW
