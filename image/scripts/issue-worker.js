@@ -570,11 +570,13 @@ When you're done, summarize what you changed.`;
         const claude = spawn('claude', [
             '--dangerously-skip-permissions',
             '--no-session-persistence',  // Fresh context for each issue
+            '--verbose',  // Show detailed output including reasoning
+            '--debug',    // Enable debug mode for full visibility
             prompt
         ], {
             cwd: PROJECT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, TERM: 'xterm-256color' }  // Better terminal support
+            env: { ...process.env, TERM: 'xterm-256color', ANTHROPIC_LOG: 'debug' }
         });
 
         let output = '';

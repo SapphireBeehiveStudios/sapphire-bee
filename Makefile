@@ -443,7 +443,7 @@ ifndef REPO
 	@echo "   or: make pool-cleanup-claims REPO=owner/repo ISSUE_LABEL=custom-label"
 	@exit 1
 endif
-	@$(PROJECT_ROOT)/scripts/pool-cleanup-claims.sh $(REPO) $(ISSUE_LABEL)
+	@./scripts/pool-cleanup-claims.sh $(REPO) $(ISSUE_LABEL)
 
 pool-status: ## Show worker pool status
 	@echo "╔══════════════════════════════════════════════════════════════════════╗"
