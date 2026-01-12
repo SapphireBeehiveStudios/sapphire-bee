@@ -52,7 +52,7 @@ const CLAIM_VERIFICATION_DELAY = 3000;
 // Claim timeout (ms) - claims older than this are considered stale/abandoned
 // If a worker posted a claim but crashed/restarted before adding in-progress label,
 // the claim becomes stale and should be ignored by other workers
-const CLAIM_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const CLAIM_TIMEOUT = 2 * 60 * 1000; // 2 minutes (reduced from 5 to prevent ghost worker blocking)
 
 /**
  * Log with worker prefix
@@ -360,23 +360,41 @@ async function claimIssue(issue) {
         return false;
     }
     
-    // Filter for CLAIM comments, exclude stale ones, and sort by creation time
+    // Filter for CLAIM comments, exclude stale ones, verify accessibility, and sort by creation time
     const now = Date.now();
-    const claims = commentsResponse.data
-        .filter(c => {
-            if (!c.body || !c.body.startsWith('CLAIM:')) return false;
+    const allClaims = commentsResponse.data.filter(c => c.body && c.body.startsWith('CLAIM:'));
 
-            // Check if claim is stale (older than CLAIM_TIMEOUT)
-            const claimAge = now - new Date(c.created_at).getTime();
-            if (claimAge > CLAIM_TIMEOUT) {
-                const staleWorkerId = c.body.split(':')[1] || 'unknown';
-                log(`Ignoring stale claim from worker ${staleWorkerId} (age: ${Math.round(claimAge / 1000)}s)`);
-                return false;
+    log(`Found ${allClaims.length} total CLAIM comment(s), verifying...`);
+
+    // Verify each claim is still accessible and not stale
+    const validClaims = [];
+    for (const claim of allClaims) {
+        const workerId = claim.body.split(':')[1] || 'unknown';
+        const claimAge = now - new Date(claim.created_at).getTime();
+
+        // Check if claim is stale (older than CLAIM_TIMEOUT)
+        if (claimAge > CLAIM_TIMEOUT) {
+            log(`Ignoring stale claim from worker ${workerId} (age: ${Math.round(claimAge / 1000)}s, limit: ${CLAIM_TIMEOUT / 1000}s)`);
+            continue;
+        }
+
+        // Verify claim comment is still accessible (not deleted/ghost)
+        try {
+            const verifyResponse = await github('GET',
+                `/repos/${owner}/${repo}/issues/comments/${claim.id}`
+            );
+            if (verifyResponse.status !== 200) {
+                log(`Ignoring ghost claim from worker ${workerId} (comment ${claim.id} returned ${verifyResponse.status})`);
+                continue;
             }
+            validClaims.push(claim);
+            log(`Verified claim from worker ${workerId} (age: ${Math.round(claimAge / 1000)}s)`);
+        } catch (err) {
+            log(`Ignoring ghost claim from worker ${workerId} (comment ${claim.id} verification failed: ${err.message})`);
+        }
+    }
 
-            return true;
-        })
-        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const claims = validClaims.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     
     // Step 5: Check if our claim was first
     if (claims.length === 0 || claims[0].id !== ourCommentId) {
@@ -457,6 +475,24 @@ async function findExistingPR(issue) {
  * Create a working branch for the issue, or check out existing PR branch
  */
 async function createWorkingBranch(issue) {
+    // CRITICAL: Clean up any uncommitted changes from previous failed attempts
+    // This prevents "Your local changes would be overwritten" errors
+    try {
+        log('Cleaning workspace...');
+        // Reset any staged changes
+        execSync('git reset --hard HEAD', {
+            cwd: PROJECT_DIR,
+            stdio: 'pipe'
+        });
+        // Remove untracked files
+        execSync('git clean -fd', {
+            cwd: PROJECT_DIR,
+            stdio: 'pipe'
+        });
+    } catch (err) {
+        log(`Warning: Failed to clean workspace: ${err.message}`);
+    }
+
     // First, check if there's an existing PR for this issue
     const existingPR = await findExistingPR(issue);
 
@@ -812,21 +848,24 @@ async function processIssue(issue) {
         
         issuesProcessed++;
         log(`✅ Completed issue #${issue.number}`);
-        
-        // Return to base branch for next issue
+
+        // Return to base branch for next issue and clean up
+        execSync('git reset --hard HEAD && git clean -fd', { cwd: PROJECT_DIR, stdio: 'pipe' });
         execSync(`git checkout ${GITHUB_BRANCH}`, { cwd: PROJECT_DIR, stdio: 'inherit' });
-        
+
         currentIssue = null;
         return true;
         
     } catch (err) {
         log(`❌ Error processing issue #${issue.number}: ${err.message}`);
-        
+
         try {
             await completeIssue(issue, null, false);
+            // Clean up any uncommitted changes before moving to next issue
+            execSync('git reset --hard HEAD && git clean -fd', { cwd: PROJECT_DIR, stdio: 'pipe' });
             execSync(`git checkout ${GITHUB_BRANCH}`, { cwd: PROJECT_DIR, stdio: 'pipe' });
         } catch {}
-        
+
         currentIssue = null;
         return false;
     }

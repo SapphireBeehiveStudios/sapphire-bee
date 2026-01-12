@@ -13,6 +13,7 @@
         claude claude-print claude-shell agent-status verify-permissions \
         queue-start queue-stop queue-status queue-logs queue-add queue-init queue-results \
         pool-start pool-stop pool-status pool-logs pool-logs-worker pool-scale pool-add-workers \
+        pool-health pool-health-watch pool-health-restart \
         github-app-test github-app-validate
 
 # Default target
@@ -499,6 +500,15 @@ pool-scale: _check-auth ## Scale worker pool (WORKERS=N) - WARNING: Interrupts e
 
 pool-add-workers: _check-auth ## Add workers without interrupting existing ones (WORKERS=N)
 	@./$(SCRIPT_DIR)/pool-add-workers.sh $(WORKERS)
+
+pool-health: ## Check worker pool health (shows stuck/crashed workers)
+	@./$(SCRIPT_DIR)/pool-health.sh
+
+pool-health-watch: ## Continuously monitor worker pool health
+	@./$(SCRIPT_DIR)/pool-health.sh --watch
+
+pool-health-restart: ## Check health and auto-restart stuck workers
+	@./$(SCRIPT_DIR)/pool-health.sh --restart-stuck
 
 #==============================================================================
 # STAGING WORKFLOW
