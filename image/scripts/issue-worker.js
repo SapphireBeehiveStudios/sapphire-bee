@@ -123,22 +123,36 @@ function createJWT(privateKey) {
 /**
  * Make HTTPS request
  */
-function request(options, body = null) {
+function request(options, body = null, retries = 3) {
     return new Promise((resolve, reject) => {
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    resolve({ status: res.statusCode, data: JSON.parse(data) });
-                } catch {
-                    resolve({ status: res.statusCode, data });
+        const attempt = (retriesLeft) => {
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        resolve({ status: res.statusCode, data: JSON.parse(data) });
+                    } catch {
+                        resolve({ status: res.statusCode, data });
+                    }
+                });
+            });
+
+            req.on('error', (err) => {
+                // Retry on transient network errors
+                if (retriesLeft > 0 && (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND')) {
+                    const delay = (retries - retriesLeft + 1) * 1000; // Exponential backoff
+                    setTimeout(() => attempt(retriesLeft - 1), delay);
+                } else {
+                    reject(err);
                 }
             });
-        });
-        req.on('error', reject);
-        if (body) req.write(JSON.stringify(body));
-        req.end();
+
+            if (body) req.write(JSON.stringify(body));
+            req.end();
+        };
+
+        attempt(retries);
     });
 }
 
@@ -353,13 +367,21 @@ async function checkMyPRs() {
     // (List endpoint returns undefined for mergeable/mergeable_state)
     const detailedPRs = [];
     for (const pr of myPRs) {
-        const detailResponse = await github('GET',
-            `/repos/${owner}/${repo}/pulls/${pr.number}`
-        );
-        if (detailResponse.status === 200) {
-            detailedPRs.push(detailResponse.data);
-        } else {
-            // Fallback to original PR data if detail fetch fails
+        try {
+            const detailResponse = await github('GET',
+                `/repos/${owner}/${repo}/pulls/${pr.number}`
+            );
+            if (detailResponse.status === 200) {
+                detailedPRs.push(detailResponse.data);
+            } else {
+                // Fallback to original PR data if detail fetch fails
+                detailedPRs.push(pr);
+            }
+            // Small delay to avoid overwhelming the connection
+            await sleep(100);
+        } catch (err) {
+            log(`  Warning: Failed to fetch details for PR #${pr.number}: ${err.message}`);
+            // Fallback to original PR data on error
             detailedPRs.push(pr);
         }
     }
