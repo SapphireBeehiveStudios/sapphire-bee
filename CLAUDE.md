@@ -363,6 +363,61 @@ Worker pool features:
 - Workers poll GitHub for issues labeled with `agent-ready` (configurable)
 - Workers claim issues, create branches, implement solutions, and open PRs
 - Workers continue to the next issue after completing their current task
+- **Atomic claiming** with stale claim timeout (prevents duplicate work)
+- **PR branch fixing** (workers fix failing PRs instead of creating duplicates)
+- **Pre-commit hooks** auto-installed when cloning repositories
+- **File-based logging** in `pool-logs/` directory for debugging
+
+**Health Monitoring:**
+```bash
+# Check worker pool health
+make pool-health
+
+# Continuous monitoring (updates every minute)
+make pool-health-watch
+
+# Auto-restart stuck workers
+make pool-health-restart
+
+# Clean up stale claim comments
+make pool-cleanup-claims REPO=owner/repo
+```
+
+Health checks detect:
+- **Stuck workers** - No log activity for >30 minutes (configurable)
+- **Crashed workers** - Container not running
+- **Idle workers** - Running but waiting for issues
+- **Healthy workers** - Actively polling and processing
+
+**Metrics and Analytics:**
+```bash
+# Show performance metrics
+make pool-metrics
+
+# JSON output (for programmatic use)
+make pool-metrics-json
+
+# CSV export
+make pool-metrics-csv > metrics.csv
+
+# Metrics for specific time range
+./scripts/pool-metrics.sh --since 24h
+```
+
+Metrics tracked:
+- Issues processed per worker
+- Success vs failure rates
+- Average processing time per issue
+- Throughput (issues/hour)
+- Worker utilization
+
+**Non-Disruptive Scaling:**
+```bash
+# Add workers without interrupting existing ones
+make pool-add-workers COUNT=2
+```
+
+This uses `docker run` instead of `docker compose --scale`, preventing container recreation.
 
 ### Skill: Queue Mode (Async Task Processing)
 
@@ -804,7 +859,15 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make pool-status` | Show worker pool status |
 | `make pool-logs` | Follow all worker logs |
 | `make pool-logs-worker WORKER=...` | Follow specific worker logs |
-| `make pool-scale WORKERS=...` | Scale worker pool |
+| `make pool-add-workers COUNT=...` | Add workers without interrupting pool |
+| `make pool-scale WORKERS=...` | Scale worker pool (interrupts workers) |
+| `make pool-health` | Check worker pool health |
+| `make pool-health-watch` | Continuous health monitoring |
+| `make pool-health-restart` | Auto-restart stuck workers |
+| `make pool-metrics` | Show performance metrics |
+| `make pool-metrics-json` | Metrics in JSON format |
+| `make pool-metrics-csv` | Export metrics as CSV |
+| `make pool-cleanup-claims REPO=...` | Clean stale claim comments |
 | `make pool-stop` | Stop worker pool |
 | **Queue Mode (Async)** | |
 | `make queue-start PROJECT=...` | Start queue processor daemon |
@@ -844,6 +907,8 @@ For detailed logging information, see [docs/LOGS.md](docs/LOGS.md).
 | `make px` | `make pool-stop` |
 | `make pl` | `make pool-logs` |
 | `make plw` | `make pool-logs-worker` |
+| `make ph` | `make pool-health` |
+| `make pm` | `make pool-metrics` |
 
 ## Authentication
 

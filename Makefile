@@ -799,6 +799,8 @@ pl: pool-logs
 plf: pool-logs-files
 plw: pool-logs-worker
 plc: pool-cleanup-claims
+ph: pool-health
+pm: pool-metrics
 
 # Print configuration
 config: ## Show current configuration
