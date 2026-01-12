@@ -60,6 +60,7 @@ let currentIssue = null;
 let issuesProcessed = 0;
 let prsFixed = 0;
 let conflictsResolved = 0;
+let stalePRsUpdated = 0;
 let githubToken = null;
 let tokenExpiry = 0;
 
@@ -270,10 +271,65 @@ async function ensureRepoCloned() {
 }
 
 /**
+ * Clean up stale PR-CLAIM comments across all open PRs
+ */
+async function cleanupStalePRClaims() {
+    const [owner, repo] = GITHUB_REPO.split('/');
+
+    // Get all open PRs
+    const response = await github('GET',
+        `/repos/${owner}/${repo}/pulls?state=open&per_page=100`
+    );
+
+    if (response.status !== 200) {
+        return;
+    }
+
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const pr of response.data) {
+        try {
+            const commentsResponse = await github('GET',
+                `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
+            );
+
+            if (commentsResponse.status !== 200) {
+                continue;
+            }
+
+            const staleClaims = commentsResponse.data.filter(c => {
+                if (!c.body || !c.body.startsWith('PR-CLAIM:')) return false;
+                const age = now - new Date(c.created_at).getTime();
+                return age > CLAIM_TIMEOUT;
+            });
+
+            for (const claim of staleClaims) {
+                const workerId = claim.body.split(':')[1] || 'unknown';
+                log(`Cleaning up stale PR-CLAIM from ${workerId} on PR #${pr.number} (${Math.round((now - new Date(claim.created_at).getTime()) / 1000 / 60)} min old)`);
+                await github('DELETE',
+                    `/repos/${owner}/${repo}/issues/comments/${claim.id}`
+                );
+                cleaned++;
+            }
+        } catch (err) {
+            // Continue cleaning other PRs
+        }
+    }
+
+    if (cleaned > 0) {
+        log(`🧹 Cleaned up ${cleaned} stale PR-CLAIM comment(s)`);
+    }
+}
+
+/**
  * PHASE 1: Check this worker's open PRs for problems
  */
 async function checkMyPRs() {
     const [owner, repo] = GITHUB_REPO.split('/');
+
+    // Clean up stale PR claims first
+    await cleanupStalePRClaims();
 
     log('🔍 PHASE 1: Checking my open PRs for problems...');
 
@@ -296,8 +352,12 @@ async function checkMyPRs() {
     const problems = {
         failing: [],
         conflicts: [],
+        stale: [],
         count: myPRs.length
     };
+
+    const now = Date.now();
+    const STALE_DAYS = 14; // PRs older than 14 days are considered stale
 
     for (const pr of myPRs) {
         // Check CI status
@@ -325,11 +385,19 @@ async function checkMyPRs() {
             log(`  PR #${pr.number}: ⚠️  Merge conflicts`);
             problems.conflicts.push(pr);
         }
+
+        // Check if stale (no updates in STALE_DAYS)
+        const prAge = now - new Date(pr.updated_at).getTime();
+        const ageInDays = Math.floor(prAge / (1000 * 60 * 60 * 24));
+        if (ageInDays >= STALE_DAYS) {
+            log(`  PR #${pr.number}: 🕰️  Stale (${ageInDays} days old)`);
+            problems.stale.push({ pr, ageInDays });
+        }
     }
 
-    const totalProblems = problems.failing.length + problems.conflicts.length;
+    const totalProblems = problems.failing.length + problems.conflicts.length + problems.stale.length;
     if (totalProblems > 0) {
-        log(`⚠️  Found ${totalProblems} problem(s) requiring attention`);
+        log(`⚠️  Found ${totalProblems} problem(s): ${problems.failing.length} failing, ${problems.conflicts.length} conflicts, ${problems.stale.length} stale`);
     } else {
         log(`✅ All ${myPRs.length} PRs are healthy`);
     }
@@ -343,6 +411,13 @@ async function checkMyPRs() {
 async function autoFixConflicts(pr) {
     if (!AUTO_FIX_CONFLICTS) {
         log(`  Skipping auto-fix (AUTO_FIX_CONFLICTS=false)`);
+        return false;
+    }
+
+    // Claim PR before working on it
+    const claimed = await claimPR(pr);
+    if (!claimed) {
+        log(`  Could not claim PR #${pr.number}, skipping...`);
         return false;
     }
 
@@ -456,6 +531,13 @@ async function autoFixConflicts(pr) {
  * PHASE 1: Auto-fix common CI failures
  */
 async function autoFixCIFailures(pr, failedChecks) {
+    // Claim PR before working on it
+    const claimed = await claimPR(pr);
+    if (!claimed) {
+        log(`  Could not claim PR #${pr.number}, skipping...`);
+        return false;
+    }
+
     log(`  🔧 Analyzing CI failures for PR #${pr.number}...`);
     const [owner, repo] = GITHUB_REPO.split('/');
 
@@ -575,6 +657,116 @@ async function autoFixCIFailures(pr, failedChecks) {
 }
 
 /**
+ * PHASE 1: Update stale PRs by rebasing on main
+ */
+async function updateStalePRs(stalePRs) {
+    const [owner, repo] = GITHUB_REPO.split('/');
+
+    // Sort by age (newest first) - give recent PRs priority
+    stalePRs.sort((a, b) => a.ageInDays - b.ageInDays);
+
+    for (const { pr, ageInDays } of stalePRs) {
+        log(`  🔄 Updating stale PR #${pr.number} (${ageInDays} days old)...`);
+
+        // Claim PR before working on it
+        const claimed = await claimPR(pr);
+        if (!claimed) {
+            log(`  Could not claim PR #${pr.number}, skipping...`);
+            continue;
+        }
+
+        try {
+            // Clean workspace
+            execSync('git reset --hard HEAD && git clean -fd', {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+
+            // Fetch and checkout the PR branch
+            execSync(`git fetch origin ${pr.head.ref}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+            execSync(`git checkout ${pr.head.ref}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+
+            // Fetch latest main
+            execSync(`git fetch origin ${GITHUB_BRANCH}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+
+            // Attempt rebase to bring PR up to date
+            try {
+                execSync(`git rebase origin/${GITHUB_BRANCH}`, {
+                    cwd: PROJECT_DIR,
+                    stdio: 'pipe'
+                });
+                log(`  ✅ Rebased successfully`);
+            } catch (rebaseErr) {
+                // Rebase failed, try auto-resolution
+                log(`  ⚠️  Rebase conflicts, attempting auto-resolution...`);
+
+                try {
+                    execSync('git checkout --ours .', {
+                        cwd: PROJECT_DIR,
+                        stdio: 'pipe'
+                    });
+                    execSync('git add .', { cwd: PROJECT_DIR, stdio: 'pipe' });
+                    execSync('git rebase --continue', {
+                        cwd: PROJECT_DIR,
+                        stdio: 'pipe'
+                    });
+                    log(`  ✅ Auto-resolved conflicts`);
+                } catch {
+                    // Can't auto-resolve, abort
+                    execSync('git rebase --abort', {
+                        cwd: PROJECT_DIR,
+                        stdio: 'pipe'
+                    });
+                    log(`  ❌ Cannot auto-resolve, skipping this PR`);
+                    continue;
+                }
+            }
+
+            // Push the updated branch
+            const token = await getInstallationToken();
+            execSync(`git push https://x-access-token:${token}@github.com/${GITHUB_REPO}.git ${pr.head.ref} --force-with-lease`, {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+
+            // Comment on PR
+            await github('POST',
+                `/repos/${owner}/${repo}/issues/${pr.number}/comments`,
+                {
+                    body: `🔄 Rebased on latest \`${GITHUB_BRANCH}\` to bring this PR up to date (was ${ageInDays} days old).`
+                }
+            );
+
+            stalePRsUpdated++; // Reusing counter for "PRs updated"
+            log(`  ✅ Updated stale PR #${pr.number}`);
+        } catch (err) {
+            log(`  ❌ Failed to update stale PR #${pr.number}: ${err.message}`);
+        } finally {
+            // Return to main branch
+            try {
+                execSync('git reset --hard HEAD && git clean -fd', {
+                    cwd: PROJECT_DIR,
+                    stdio: 'pipe'
+                });
+                execSync(`git checkout ${GITHUB_BRANCH}`, {
+                    cwd: PROJECT_DIR,
+                    stdio: 'pipe'
+                });
+            } catch {}
+        }
+    }
+}
+
+/**
  * PHASE 1: Fix all problems found in my PRs
  */
 async function fixMyPRs(problems) {
@@ -590,7 +782,13 @@ async function fixMyPRs(problems) {
         await autoFixCIFailures(pr, failedChecks);
     }
 
-    log(`📊 Maintenance complete: ${prsFixed} PRs fixed, ${conflictsResolved} conflicts resolved`);
+    // Update stale PRs to bring them current
+    if (problems.stale.length > 0) {
+        log(`🔄 Updating ${problems.stale.length} stale PR(s) to bring them current...`);
+        await updateStalePRs(problems.stale);
+    }
+
+    log(`📊 Maintenance complete: ${prsFixed} PRs fixed, ${conflictsResolved} conflicts resolved, ${stalePRsUpdated} stale PRs updated`);
 }
 
 /**
@@ -754,6 +952,115 @@ async function claimIssue(issue) {
     await github('PATCH',
         `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`,
         { body: `🤖 Agent \`${WORKER_ID}\` claimed and is now working on this issue.` }
+    );
+
+    return true;
+}
+
+/**
+ * Atomic PR claiming to prevent multiple workers from fixing the same PR
+ * Similar to issue claiming but for PRs
+ */
+async function claimPR(pr) {
+    const [owner, repo] = GITHUB_REPO.split('/');
+    const claimId = `PR-CLAIM:${WORKER_ID}`;
+
+    log(`Attempting to claim PR #${pr.number}...`);
+
+    // Check if PR already has a recent claim comment
+    const commentsResponse = await github('GET',
+        `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
+    );
+
+    if (commentsResponse.status === 200) {
+        const now = Date.now();
+        const recentClaims = commentsResponse.data.filter(c => {
+            if (!c.body || !c.body.startsWith('PR-CLAIM:')) return false;
+            const age = now - new Date(c.created_at).getTime();
+            return age < CLAIM_TIMEOUT;
+        });
+
+        if (recentClaims.length > 0) {
+            const workerId = recentClaims[0].body.split(':')[1] || 'unknown';
+            log(`PR #${pr.number} already claimed by ${workerId}, skipping...`);
+            return false;
+        }
+    }
+
+    // Post claim comment
+    const claimResponse = await github('POST',
+        `/repos/${owner}/${repo}/issues/${pr.number}/comments`,
+        { body: claimId }
+    );
+
+    if (claimResponse.status !== 201) {
+        log(`Failed to post PR claim comment: ${JSON.stringify(claimResponse.data)}`);
+        return false;
+    }
+
+    const ourCommentId = claimResponse.data.id;
+    log(`Posted PR claim comment (id: ${ourCommentId}), waiting for other claims...`);
+
+    // Wait for race window
+    await sleep(CLAIM_VERIFICATION_DELAY);
+
+    // Fetch all claims again and verify we won
+    const recheckResponse = await github('GET',
+        `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
+    );
+
+    if (recheckResponse.status !== 200) {
+        log(`Failed to fetch PR comments for verification: ${JSON.stringify(recheckResponse.data)}`);
+        return false;
+    }
+
+    const now = Date.now();
+    const allClaims = recheckResponse.data.filter(c => c.body && c.body.startsWith('PR-CLAIM:'));
+
+    const validClaims = [];
+    for (const claim of allClaims) {
+        const workerId = claim.body.split(':')[1] || 'unknown';
+        const claimAge = now - new Date(claim.created_at).getTime();
+
+        if (claimAge > CLAIM_TIMEOUT) {
+            log(`Ignoring stale PR claim from worker ${workerId}`);
+            continue;
+        }
+
+        try {
+            const verifyResponse = await github('GET',
+                `/repos/${owner}/${repo}/issues/comments/${claim.id}`
+            );
+            if (verifyResponse.status !== 200) {
+                log(`Ignoring ghost PR claim from worker ${workerId}`);
+                continue;
+            }
+            validClaims.push(claim);
+        } catch (err) {
+            log(`Ignoring invalid PR claim from worker ${workerId}: ${err.message}`);
+        }
+    }
+
+    const claims = validClaims.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    if (claims.length === 0 || claims[0].id !== ourCommentId) {
+        const winner = claims.length > 0 ? claims[0].body.split(':')[1] : 'unknown';
+        log(`Lost PR claim race to worker ${winner}, skipping PR #${pr.number}`);
+
+        // Delete our claim comment
+        await github('DELETE',
+            `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`
+        );
+
+        return false;
+    }
+
+    log(`Won claim for PR #${pr.number}!`);
+
+    // Update comment to indicate we're working on it
+    await github('PATCH',
+        `/repos/${owner}/${repo}/issues/comments/${ourCommentId}`,
+        { body: `🔧 Worker \`${WORKER_ID}\` is fixing this PR...` }
     );
 
     return true;
@@ -1160,7 +1467,7 @@ async function pollForIssues() {
     // PHASE 1: Maintenance - Check and fix my PRs
     const problems = await checkMyPRs();
 
-    if (problems.failing.length > 0 || problems.conflicts.length > 0) {
+    if (problems.failing.length > 0 || problems.conflicts.length > 0 || problems.stale.length > 0) {
         await fixMyPRs(problems);
         // After fixing, loop back to check again
         const jitter = Math.random() * 5000;
