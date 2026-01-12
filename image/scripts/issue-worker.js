@@ -372,23 +372,97 @@ async function claimIssue(issue) {
 }
 
 /**
- * Create a working branch for the issue
+ * Check if issue has an existing open PR
+ * Returns PR object with branch name if found, null otherwise
+ */
+async function findExistingPR(issue) {
+    const [owner, repo] = GITHUB_REPO.split('/');
+
+    // Search for PRs that reference this issue
+    const response = await github('GET',
+        `/repos/${owner}/${repo}/pulls?state=open&per_page=100`
+    );
+
+    if (response.status !== 200) {
+        log(`Warning: Failed to fetch PRs: ${response.status}`);
+        return null;
+    }
+
+    // Find PR that mentions this issue number in body or title
+    const issueRef = `#${issue.number}`;
+    for (const pr of response.data) {
+        const titleMatch = pr.title && pr.title.includes(issueRef);
+        const bodyMatch = pr.body && pr.body.includes(issueRef);
+
+        if (titleMatch || bodyMatch) {
+            log(`Found existing PR #${pr.number} for issue #${issue.number}: ${pr.head.ref}`);
+            return {
+                number: pr.number,
+                branch: pr.head.ref,
+                title: pr.title,
+                checks_failed: false // We'll assume it needs fixing if we're here
+            };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Create a working branch for the issue, or check out existing PR branch
  */
 async function createWorkingBranch(issue) {
+    // First, check if there's an existing PR for this issue
+    const existingPR = await findExistingPR(issue);
+
+    if (existingPR) {
+        log(`Checking out existing PR branch: ${existingPR.branch}`);
+
+        // Ensure we're on the base branch first
+        execSync(`git checkout ${GITHUB_BRANCH}`, {
+            cwd: PROJECT_DIR,
+            stdio: 'pipe'
+        });
+
+        // Fetch the PR branch and check it out
+        try {
+            execSync(`git fetch origin ${existingPR.branch}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'inherit'
+            });
+            execSync(`git checkout ${existingPR.branch}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'inherit'
+            });
+            execSync(`git pull origin ${existingPR.branch}`, {
+                cwd: PROJECT_DIR,
+                stdio: 'inherit'
+            });
+
+            log(`✓ Checked out existing branch: ${existingPR.branch}`);
+            return existingPR.branch;
+        } catch (err) {
+            log(`Warning: Failed to checkout existing branch, creating new one: ${err.message}`);
+            // Fall through to create new branch
+        }
+    }
+
+    // No existing PR, or failed to check it out - create new branch
     const branchName = `claude/issue-${issue.number}-${Date.now()}`;
-    
+    log(`Creating new branch: ${branchName}`);
+
     // Ensure we're on the base branch and up to date
     execSync(`git checkout ${GITHUB_BRANCH} && git pull origin ${GITHUB_BRANCH}`, {
         cwd: PROJECT_DIR,
         stdio: 'inherit'
     });
-    
+
     // Create and checkout new branch
     execSync(`git checkout -b ${branchName}`, {
         cwd: PROJECT_DIR,
         stdio: 'inherit'
     });
-    
+
     return branchName;
 }
 
@@ -428,8 +502,29 @@ async function refreshMcpToken() {
 /**
  * Run Claude on the issue
  */
-async function runClaude(issue) {
-    const prompt = `You are working on GitHub issue #${issue.number}: "${issue.title}"
+async function runClaude(issue, branchName) {
+    // Check if this is an existing PR branch that needs fixing
+    const isExistingBranch = branchName.includes('-') &&
+                            !branchName.endsWith(Date.now().toString().slice(0, -3));
+
+    const prompt = isExistingBranch
+        ? `You are working on GitHub issue #${issue.number}: "${issue.title}"
+
+Issue description:
+${issue.body || 'No description provided.'}
+
+IMPORTANT: You are working on an EXISTING branch (${branchName}) that has an open PR.
+This means there's already an implementation attempt that may be failing tests or checks.
+
+Instructions:
+1. Review the existing code changes in this branch (git log, git diff ${GITHUB_BRANCH})
+2. Identify what's failing (check test output, build errors, or issue comments)
+3. Fix the problems - don't start from scratch, improve what's there
+4. Run tests to verify your fixes work
+5. Commit your changes with a clear message explaining what you fixed
+
+When you're done, summarize what was broken and how you fixed it.`
+        : `You are working on GitHub issue #${issue.number}: "${issue.title}"
 
 Issue description:
 ${issue.body || 'No description provided.'}
@@ -437,12 +532,16 @@ ${issue.body || 'No description provided.'}
 Instructions:
 1. Analyze the issue and understand what needs to be done
 2. Make the necessary code changes to address this issue
-3. Test your changes if possible (run Godot validation)
-4. Commit your changes with a clear commit message referencing the issue
+3. Write tests for your changes
+4. Run all tests to verify everything works
+5. Commit your changes with a clear commit message referencing the issue
 
 When you're done, summarize what you changed.`;
 
     log(`Running Claude on issue #${issue.number}...`);
+    if (isExistingBranch) {
+        log(`📝 Note: Fixing existing PR branch`);
+    }
 
     // Refresh MCP token before running Claude (in case it expired)
     await refreshMcpToken();
@@ -613,12 +712,15 @@ async function processIssue(issue) {
             return false;
         }
         
-        // Create working branch
+        // Create working branch or checkout existing PR branch
         const branchName = await createWorkingBranch(issue);
-        log(`Created branch: ${branchName}`);
-        
-        // Run Claude
-        const result = await runClaude(issue);
+        log(`Working on branch: ${branchName}`);
+
+        // Check if this is an existing PR
+        const existingPR = await findExistingPR(issue);
+
+        // Run Claude (with context about whether fixing existing PR)
+        const result = await runClaude(issue, branchName);
         
         // Check if any commits were made
         let hasChanges = false;
@@ -639,11 +741,24 @@ async function processIssue(issue) {
             hasChanges = false;
         }
         
-        let pr = null;
+        let pr = existingPR;
         if (hasChanges && result.success) {
-            pr = await createPullRequest(issue, branchName, result.output);
-            if (pr) {
-                log(`✅ Created PR #${pr.number}`);
+            if (existingPR) {
+                // Update existing PR with a comment
+                log(`Updating existing PR #${existingPR.number}`);
+                const [owner, repo] = GITHUB_REPO.split('/');
+                await github('POST',
+                    `/repos/${owner}/${repo}/issues/${existingPR.number}/comments`,
+                    {
+                        body: `🔧 Agent fixed issues in this PR.\n\n${result.output || 'Updated code and fixed failing checks.'}`
+                    }
+                );
+            } else {
+                // Create new PR
+                pr = await createPullRequest(issue, branchName, result.output);
+                if (pr) {
+                    log(`✅ Created PR #${pr.number}`);
+                }
             }
         }
         

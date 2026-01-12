@@ -662,14 +662,24 @@ Use update_issue_comment:
 - Find a different unclaimed issue
 - Optionally delete your claim comment to reduce clutter
 
-### Step 3: Create a Feature Branch
+### Step 3: Create a Feature Branch (or Use Existing PR Branch)
 
-Always work on a feature branch, never on main:
+**The system will automatically:**
+1. Check if the issue already has an open PR
+2. If yes: Check out that PR's branch to fix it
+3. If no: Create a new feature branch
 
-```bash
-# Branch naming convention: claude/issue-N-brief-description
-git checkout -b claude/issue-42-add-feature
-```
+**For existing PR branches:**
+- You'll be told in your prompt that you're fixing an existing PR
+- Review what's already there: `git log`, `git diff main`
+- Fix the problems (failing tests, linting errors, etc.)
+- Push to the same branch (this updates the PR automatically)
+- **Do NOT create a new PR** - one already exists!
+
+**For new branches:**
+- Branch naming convention: `claude/issue-N-brief-description`
+- Example: `claude/issue-42-add-feature`
+- Work normally and create a PR at the end
 
 ### Step 4: Implement + Write Tests
 
