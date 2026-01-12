@@ -20,7 +20,7 @@
  *   GITHUB_BRANCH       - Base branch (default: main)
  *   ISSUE_LABEL         - Label to filter issues (default: agent-ready)
  *   POLL_INTERVAL       - Seconds between polls (default: 60)
- *   MAX_OPEN_PRS        - Max open PRs per worker (default: 3)
+ *   MAX_OPEN_PRS        - Max open PRs per worker (default: 10)
  *   AUTO_FIX_CONFLICTS  - Auto-fix merge conflicts (default: true)
  *   AUTO_FIX_GO_MOD     - Auto-fix go mod issues (default: true)
  *   AUTO_FIX_PRECOMMIT  - Auto-fix pre-commit failures (default: true)
@@ -40,7 +40,7 @@ const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '60', 10) * 1000;
 const PROJECT_DIR = '/project';
 
 // Phase 1 Configuration
-const MAX_OPEN_PRS = parseInt(process.env.MAX_OPEN_PRS || '3', 10);
+const MAX_OPEN_PRS = parseInt(process.env.MAX_OPEN_PRS || '10', 10);
 const AUTO_FIX_CONFLICTS = process.env.AUTO_FIX_CONFLICTS !== 'false';
 const AUTO_FIX_GO_MOD = process.env.AUTO_FIX_GO_MOD !== 'false';
 const AUTO_FIX_PRECOMMIT = process.env.AUTO_FIX_PRECOMMIT !== 'false';

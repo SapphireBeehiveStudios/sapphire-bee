@@ -101,7 +101,7 @@ Workers follow a maintenance-first approach:
 
 **Configuration** (`.env`):
 ```bash
-MAX_OPEN_PRS=3                # Work limit per worker
+MAX_OPEN_PRS=10               # Work limit per worker
 AUTO_FIX_CONFLICTS=true       # Auto-rebase merge conflicts
 AUTO_FIX_GO_MOD=true          # Auto-fix go mod issues
 AUTO_FIX_PRECOMMIT=true       # Auto-fix pre-commit failures
