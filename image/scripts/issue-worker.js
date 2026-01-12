@@ -63,6 +63,7 @@ let conflictsResolved = 0;
 let stalePRsUpdated = 0;
 let githubToken = null;
 let tokenExpiry = 0;
+let rateLimitedUntil = 0; // Timestamp when rate limit expires
 
 // Claim verification delay (ms) - wait for other workers to potentially claim
 const CLAIM_VERIFICATION_DELAY = 3000;
@@ -397,6 +398,13 @@ async function checkMyPRs() {
     const STALE_DAYS = 14; // PRs older than 14 days are considered stale
 
     for (const pr of detailedPRs) {
+        // Skip PRs that need human review
+        const needsHumanReview = pr.labels?.some(l => l.name === 'needs-human-review');
+        if (needsHumanReview) {
+            log(`  PR #${pr.number}: 👤 Needs human review (skipping)`);
+            continue;
+        }
+
         // Check CI status
         try {
             const checksResponse = await github('GET',
@@ -515,11 +523,17 @@ async function autoFixConflicts(pr) {
                 });
                 log(`  ❌ Cannot auto-resolve conflicts, needs human review`);
 
+                // Add needs-human-review label
+                await github('POST',
+                    `/repos/${owner}/${repo}/issues/${pr.number}/labels`,
+                    { labels: ['needs-human-review'] }
+                );
+
                 // Add comment to PR
                 await github('POST',
                     `/repos/${owner}/${repo}/issues/${pr.number}/comments`,
                     {
-                        body: `⚠️ Cannot automatically resolve merge conflicts. Manual resolution required.\n\nPlease rebase this PR on \`${GITHUB_BRANCH}\`.`
+                        body: `⚠️ Cannot automatically resolve merge conflicts. Manual resolution required.\n\nPlease rebase this PR on \`${GITHUB_BRANCH}\`.\n\nLabeled as \`needs-human-review\`.`
                     }
                 );
 
@@ -805,27 +819,44 @@ async function updateStalePRs(stalePRs) {
 
 /**
  * PHASE 1: Fix all problems found in my PRs
+ * Only attempts ONE PR fix per cycle to avoid rate limiting
  */
 async function fixMyPRs(problems) {
     log('🔧 PHASE 1: Fixing my broken PRs...');
 
-    // Fix conflicts first (quick wins)
-    for (const pr of problems.conflicts) {
-        await autoFixConflicts(pr);
+    // Check if we're rate limited
+    if (Date.now() < rateLimitedUntil) {
+        const minutesLeft = Math.ceil((rateLimitedUntil - Date.now()) / 60000);
+        log(`⏸️  Rate limited, waiting ${minutesLeft} more minute(s)...`);
+        return;
     }
 
-    // Fix failing CI
-    for (const { pr, failedChecks } of problems.failing) {
+    // Fix conflicts first (but only ONE per cycle)
+    if (problems.conflicts.length > 0) {
+        log(`Found ${problems.conflicts.length} PR(s) with conflicts, attempting to fix one...`);
+        const fixed = await autoFixConflicts(problems.conflicts[0]);
+        if (fixed) {
+            log(`✅ Fixed conflict in PR #${problems.conflicts[0].number}`);
+        }
+        return; // Return after attempting one, check again next cycle
+    }
+
+    // Fix failing CI (only ONE per cycle)
+    if (problems.failing.length > 0) {
+        log(`Found ${problems.failing.length} failing PR(s), attempting to fix one...`);
+        const { pr, failedChecks } = problems.failing[0];
         await autoFixCIFailures(pr, failedChecks);
+        return; // Return after attempting one
     }
 
-    // Update stale PRs to bring them current
+    // Update stale PRs (only ONE per cycle)
     if (problems.stale.length > 0) {
-        log(`🔄 Updating ${problems.stale.length} stale PR(s) to bring them current...`);
-        await updateStalePRs(problems.stale);
+        log(`Found ${problems.stale.length} stale PR(s), updating one...`);
+        await updateStalePRs([problems.stale[0]]);
+        return; // Return after attempting one
     }
 
-    log(`📊 Maintenance complete: ${prsFixed} PRs fixed, ${conflictsResolved} conflicts resolved, ${stalePRsUpdated} stale PRs updated`);
+    log(`📊 Session stats: ${prsFixed} PRs fixed, ${conflictsResolved} conflicts resolved, ${stalePRsUpdated} stale PRs updated`);
 }
 
 /**
@@ -901,7 +932,15 @@ async function claimIssue(issue) {
     );
 
     if (claimResponse.status !== 201) {
-        log(`Failed to post claim comment: ${JSON.stringify(claimResponse.data)}`);
+        // Check for rate limiting
+        if (claimResponse.status === 403 && claimResponse.data.message &&
+            claimResponse.data.message.includes('secondary rate limit')) {
+            const backoffMinutes = 10;
+            rateLimitedUntil = Date.now() + (backoffMinutes * 60 * 1000);
+            log(`⚠️  Hit GitHub secondary rate limit! Backing off for ${backoffMinutes} minutes...`);
+        } else {
+            log(`Failed to post claim comment: ${JSON.stringify(claimResponse.data)}`);
+        }
         return false;
     }
 
@@ -1031,7 +1070,15 @@ async function claimPR(pr) {
     );
 
     if (claimResponse.status !== 201) {
-        log(`Failed to post PR claim comment: ${JSON.stringify(claimResponse.data)}`);
+        // Check for rate limiting
+        if (claimResponse.status === 403 && claimResponse.data.message &&
+            claimResponse.data.message.includes('secondary rate limit')) {
+            const backoffMinutes = 10; // Back off for 10 minutes
+            rateLimitedUntil = Date.now() + (backoffMinutes * 60 * 1000);
+            log(`⚠️  Hit GitHub secondary rate limit! Backing off for ${backoffMinutes} minutes...`);
+        } else {
+            log(`Failed to post PR claim comment: ${JSON.stringify(claimResponse.data)}`);
+        }
         return false;
     }
 
@@ -1501,6 +1548,14 @@ async function processIssue(issue) {
  * Main polling loop with Phase-Based workflow
  */
 async function pollForIssues() {
+    // Check if we're rate limited
+    if (Date.now() < rateLimitedUntil) {
+        const minutesLeft = Math.ceil((rateLimitedUntil - Date.now()) / 60000);
+        log(`⏸️  Rate limited, sleeping for ${minutesLeft} more minute(s)...`);
+        setTimeout(pollForIssues, Math.min(5 * 60 * 1000, rateLimitedUntil - Date.now())); // Check again in 5 min or when limit expires
+        return;
+    }
+
     // PHASE 1: Maintenance - Check and fix my PRs
     const problems = await checkMyPRs();
 
