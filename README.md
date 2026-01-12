@@ -12,7 +12,14 @@
 [![CI](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/ci.yml/badge.svg)](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/ci.yml)
 [![Build and Push](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/build-and-push.yml/badge.svg)](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/build-and-push.yml)
 
-A secure, sandboxed environment for running Claude Code with any development projects on Apple Silicon Macs.
+A secure, sandboxed environment for running Claude Code with development projects. Run Claude in isolated containers with network allowlisting, filesystem isolation, and security hardening.
+
+**Key Features:**
+- **Worker Pool Mode** - Run multiple autonomous agents processing GitHub issues in parallel
+- **Build Tools** - Pre-installed Go, Python, Node.js, and build essentials
+- **Package Manager Access** - Allowlisted network access to golang.org, pypi.org, npm registry
+- **Network Isolation** - DNS-based allowlisting with nginx stream proxies
+- **Multiple Operating Modes** - Persistent, isolated, pool, queue, and one-shot modes
 
 ## Architecture
 
@@ -60,6 +67,8 @@ A secure, sandboxed environment for running Claude Code with any development pro
                           │   INTERNET (Untrusted)│
                           │  - GitHub             │
                           │  - Anthropic API      │
+                          │  - golang.org         │
+                          │  - pypi.org           │
                           └───────────────────────┘
 ```
 
@@ -72,6 +81,74 @@ A secure, sandboxed environment for running Claude Code with any development pro
 | Proxies | Semi-trusted | Bridge between sandbox and internet |
 | DNS Filter | Semi-trusted | Controls network access |
 | Internet | Untrusted | Allowlisted domains only |
+
+## Build Tools & Development Environment
+
+The agent container includes a comprehensive development environment for working with multiple languages and frameworks.
+
+### Installed Tools
+
+| Category | Tools | Version |
+|----------|-------|---------|
+| **Languages** | Node.js, Python 3, Go | Latest from Debian repos |
+| **Package Managers** | npm, pip, uv, go mod | Latest |
+| **Build Tools** | make, gcc, g++, git | Latest |
+| **Utilities** | curl, jq, zip, unzip, file, gh CLI | Latest |
+| **Code Quality** | pre-commit, black, ruff, detect-secrets | Latest via uv |
+
+### Network Access for Package Managers
+
+The sandbox provides allowlisted network access to these package repositories:
+
+| Domain | Purpose | Proxy IP |
+|--------|---------|----------|
+| `api.github.com` | GitHub API (issues, PRs, releases) | 10.100.1.10 |
+| `raw.githubusercontent.com` | Raw file content | 10.100.1.11 |
+| `codeload.github.com` | Repository archives | 10.100.1.12 |
+| `api.anthropic.com` | Claude API | 10.100.1.14 |
+| `proxy.golang.org` | Go module proxy | 10.100.1.20 |
+| `sum.golang.org` | Go checksum database | 10.100.1.21 |
+| `pypi.org` | Python package index | 10.100.1.22 |
+| `files.pythonhosted.org` | Python package files | 10.100.1.23 |
+
+### Usage Examples
+
+**Go Projects:**
+```bash
+# Inside the container
+cd /project/your-go-service
+go mod download
+go build
+go test ./...
+```
+
+**Python Projects:**
+```bash
+# Using venv (recommended due to PEP 668)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest
+
+# Using uv (faster)
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+**Node.js Projects:**
+```bash
+npm install
+npm test
+npm run build
+```
+
+**Pre-commit Hooks:**
+```bash
+# Install and run pre-commit hooks
+pre-commit install
+pre-commit run --all-files
+```
 
 ## Prerequisites
 
@@ -126,8 +203,12 @@ claude setup-token
 # 3. Run health check
 make doctor
 
-# 4. Build the agent image
-make build
+# 4. Get the agent image (recommended: use pre-built)
+docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
+docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
+
+# 4a. Alternative: Build locally (only if modifying the Dockerfile)
+# make build
 
 # 5. Start persistent agent (recommended)
 make up-agent PROJECT=/path/to/your/project
@@ -323,6 +404,14 @@ You can use either `make` targets or scripts directly:
 | `make up-isolated REPO=...` | Start isolated agent (clones repo) |
 | `make up-isolated REPO=... BRANCH=...` | Start with specific branch |
 | `make down-isolated` | Stop agent and destroy workspace |
+| **Pool Mode** | |
+| `make pool-start REPO=... WORKERS=...` | Start worker pool |
+| `make pool-status` | Show all workers status |
+| `make pool-logs` | Follow all worker logs |
+| `make pool-logs-worker WORKER=...` | Follow specific worker logs |
+| `make pool-add-workers COUNT=...` | Add workers without interrupting pool |
+| `make pool-cleanup-claims REPO=...` | Clean stale claim comments |
+| `make pool-stop` | Stop all workers |
 | **Queue Mode** | |
 | `make queue-start PROJECT=...` | Start async queue processor |
 | `make queue-add TASK="..." NAME=...` | Add task to queue |
@@ -501,8 +590,14 @@ make pool-status
 # Watch logs from all workers
 make pool-logs
 
-# Scale up to 5 workers
-make pool-scale WORKERS=5
+# Watch a specific worker's logs
+make pool-logs-worker WORKER=worker-1
+
+# Add more workers without interrupting existing ones
+make pool-add-workers COUNT=2
+
+# Clean up stale claim comments (if workers crashed)
+make pool-cleanup-claims REPO=myorg/my-project
 
 # Stop all workers
 make pool-stop
@@ -512,9 +607,35 @@ make pool-stop
 
 1. **Workers start** - Each worker clones the repository into its own isolated Docker volume
 2. **Issue polling** - Workers poll GitHub for issues labeled `agent-ready` (configurable)
-3. **Claim & work** - Worker claims an issue by adding `in-progress` label, creates a branch, runs Claude
-4. **Open PR** - When done, worker pushes branch and opens a PR referencing the issue
-5. **Next issue** - Worker returns to base branch and polls for more issues
+3. **Claim & work** - Worker claims an issue by:
+   - Adding an `in-progress` label
+   - Posting a CLAIM comment with worker ID
+   - Creating a branch (or checking out existing PR branch if issue has a failing PR)
+4. **Execute work** - Worker runs Claude Code to implement the solution
+5. **Open/Update PR** - Worker pushes changes and opens a new PR or updates existing one
+6. **Next issue** - Worker removes `in-progress` label, adds `agent-complete`, polls for next issue
+
+### Key Features
+
+**Atomic Claiming:**
+- Workers use GitHub's timestamp-based sorting to prevent race conditions
+- Stale claims (>5 minutes old) are automatically ignored
+- Claim comments prevent duplicate work
+
+**PR Branch Fixing:**
+- If an issue already has an open PR with failing CI, workers check out that branch
+- Workers fix the failing tests/issues instead of creating duplicate PRs
+- Updates existing PR with new commits
+
+**Non-Disruptive Scaling:**
+- Add workers to running pool without interrupting active workers
+- Uses `docker run` instead of `docker compose --scale` to avoid recreation
+- New workers join immediately and start claiming issues
+
+**File-Based Logging:**
+- Each worker conversation logged to `pool-logs/worker-<id>_<timestamp>.log`
+- Easy to review what each worker did for debugging and auditing
+- Centralized log directory shared across all workers
 
 ### Required Labels
 
@@ -535,6 +656,35 @@ GITHUB_REPO=myorg/my-project           # Repository to work on
 ISSUE_LABEL=agent-ready                # Label to filter issues (default)
 POLL_INTERVAL=60                       # Seconds between issue checks
 WORKERS=3                              # Number of parallel workers
+
+# Optional debugging flags
+CLAUDE_DEBUG=1                         # Enable Claude Code debug output
+GITHUB_DEBUG=1                         # Enable GitHub API debug output
+POOL_DEBUG=1                           # Enable worker pool debug output
+```
+
+### Logging
+
+All worker conversations are logged to the `pool-logs/` directory:
+
+```
+pool-logs/
+├── worker-abc123_20250111_143022.log  # Worker abc123's conversation
+├── worker-def456_20250111_143045.log  # Worker def456's conversation
+└── ...
+```
+
+**Viewing logs:**
+```bash
+# Watch all workers
+make pool-logs
+
+# Watch specific worker
+make pool-logs-worker WORKER=worker-1
+
+# View completed logs
+ls -lh pool-logs/
+tail -f pool-logs/worker-abc123_*.log
 ```
 
 ### Example Workflow
@@ -737,6 +887,7 @@ docker compose -f compose/compose.base.yml logs -f dnsfilter
 | dnsfilter | All DNS queries (allowed + blocked) |
 | proxy_* | Connection attempts, bytes transferred, timing |
 | agent | Session logs in `./logs/` directory |
+| worker pool | Worker conversations in `./pool-logs/` directory |
 
 ## Threat Model
 
@@ -978,6 +1129,7 @@ sapphire-bee/
 │   ├── compose.direct.yml    # Direct mount agent (one-shot)
 │   ├── compose.persistent.yml # Persistent agent container
 │   ├── compose.isolated.yml  # Isolated agent (clones repo)
+│   ├── compose.pool.yml      # Worker pool (multiple isolated agents)
 │   ├── compose.queue.yml     # Queue processor daemon
 │   ├── compose.staging.yml   # Staging mount agent
 │   └── compose.offline.yml   # Offline mode
@@ -995,6 +1147,7 @@ sapphire-bee/
 │   │   └── install_claude_code.sh
 │   └── scripts/
 │       ├── entrypoint.sh     # Container entrypoint (sets up Claude config)
+│       ├── issue-worker.js   # Pool worker (GitHub issue processing)
 │       └── queue-watcher.js  # Async task queue processor
 ├── scripts/
 │   ├── run-claude.sh         # Main entry point
@@ -1004,7 +1157,9 @@ sapphire-bee/
 │   ├── logs-report.sh        # Log analyzer
 │   ├── doctor.sh             # Environment health check
 │   ├── up.sh / down.sh       # Service lifecycle
-│   └── build.sh              # Image builder
+│   ├── build.sh              # Image builder
+│   ├── pool-add-workers.sh   # Add workers to running pool
+│   └── pool-cleanup-claims.sh # Clean stale claim comments
 ├── tests/                     # Security test suite
 │   ├── conftest.py           # Docker Compose fixtures
 │   ├── test_dns_filtering.py
@@ -1013,6 +1168,7 @@ sapphire-bee/
 │   ├── test_filesystem_restrictions.py
 │   └── test_offline_mode.py
 ├── logs/                      # Session logs (gitignored)
+├── pool-logs/                 # Worker pool conversation logs (gitignored)
 ├── Makefile                  # Convenient make targets
 ├── .env.example              # Environment template
 ├── README.md
