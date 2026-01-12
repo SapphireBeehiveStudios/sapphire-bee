@@ -124,6 +124,7 @@ Skills are documented procedures for common tasks. Reference these when performi
 | `in-progress` | Agent has claimed and is working on it | Agent (auto) |
 | `agent-complete` | Work done, PR created | Agent (auto) |
 | `agent-failed` | Agent encountered an error | Agent (auto) |
+| `needs-human-review` | Requires human intervention (CI/CD work) | Agent (when can't complete) |
 
 ### Priority Labels (Work on Higher Priority First!)
 
@@ -177,7 +178,7 @@ Skills are documented procedures for common tasks. Reference these when performi
 │  Available:                                                 │
 │    - GitHub MCP tools (for API: issues, PRs, remote files)  │
 │    - Git CLI (for local ops + push via configured remote)   │
-│    - Node.js, Python 3, Go 1.19, common dev tools           │
+│    - Node.js, Python 3, Go 1.24, common dev tools           │
 │    - Build tools: gcc, g++, make                            │
 │    - Package managers: pip (Python), go mod (Go), npm       │
 │                                                             │
@@ -520,14 +521,20 @@ If you're running in **Issue Mode**, you browse existing GitHub issues to find w
 
 Use MCP tools to list issues and find work. **Look for issues with the `agent-ready` label** - these are issues that humans have marked as ready for agent processing.
 
+**BEFORE claiming any issue, check if it requires CI/CD work:**
+- Read the issue description and title carefully
+- Look for keywords: "CI", "workflow", "GitHub Actions", "pipeline", ".github/workflows"
+- If it requires modifying workflow files → **Skip it, add `needs-human-review` label** (see [GitHub Workflow Restrictions](#github-workflow-restrictions-critical))
+
 #### Status Labels
 
 | Label | Meaning | Action |
 |-------|---------|--------|
-| `agent-ready` | Ready for agent work | **Work on these** |
+| `agent-ready` | Ready for agent work | **Work on these** (unless requires CI/CD) |
 | `in-progress` | Already claimed by an agent | Skip |
 | `agent-complete` | Work finished | Skip |
 | `agent-failed` | Previous attempt failed | May retry if no `in-progress` |
+| `needs-human-review` | Requires human intervention | Skip (you can't help with CI/CD) |
 
 #### Priority Labels
 
@@ -1123,7 +1130,7 @@ The following build tools are pre-installed:
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `go` | 1.19.8 | Go compiler and toolchain |
+| `go` | 1.24.0 | Go compiler and toolchain (REQUIRED: CVE-2025-61729, CVE-2025-61727 fixes) |
 | `python3` | 3.11.2 | Python interpreter |
 | `pip` | 23.0.1 | Python package installer |
 | `node` | 18.x | JavaScript runtime |
@@ -1131,6 +1138,14 @@ The following build tools are pre-installed:
 | `gcc` | 12.x | C compiler (for native extensions) |
 | `g++` | 12.x | C++ compiler |
 | `make` | 4.3 | Build automation tool |
+
+**CRITICAL: Go Version Requirement**
+
+**Always use Go 1.24.0 or later** for all Go projects. This version is REQUIRED for security:
+- **CVE-2025-61729**: crypto/x509 certificate validation vulnerability
+- **CVE-2025-61727**: crypto/x509 certificate chain verification flaw
+
+**Never downgrade to Go 1.22 or earlier.** If CI or projects reference older versions, they are outdated and must be upgraded.
 
 These tools enable you to:
 - Build Go services and run Go tests
@@ -1284,8 +1299,45 @@ This sandbox prevents damage to the host system and limits blast radius if somet
 - Install system packages *(use what's pre-installed; request additions via issue)*
 - Access host filesystem outside `/project` *(isolation protects host)*
 - Run privileged operations *(no sudo/root access)*
+- **Modify GitHub workflow files in `.github/workflows/`** *(GitHub App lacks workflow permissions)*
 
 **If you need capabilities not listed here, you're probably approaching the problem wrong.** Ask yourself: can this be done with MCP tools, existing commands, or a different approach?
+
+### GitHub Workflow Restrictions (CRITICAL)
+
+**You do NOT have GitHub permissions to modify workflow files (`.github/workflows/*.yml`).**
+
+**Why:** The GitHub App token used for MCP tools lacks the `workflows` permission scope. This is intentional for security - workflow files can execute arbitrary code in CI and should only be modified by humans.
+
+**If an issue requires CI/CD changes:**
+
+1. **Read the issue carefully** - Check if it requires changes to `.github/workflows/` files
+2. **Do NOT claim the issue** if you can't complete it
+3. **Add the `needs-human-review` label** to signal human assistance is required
+4. **Comment explaining why:**
+   ```
+   Use add_issue_labels:
+     - labels: ["needs-human-review"]
+
+   Use create_issue_comment:
+     - body: |
+         I cannot complete this issue because it requires modifying GitHub workflow files
+         (`.github/workflows/*.yml`), which I don't have permissions to change.
+
+         The GitHub App token lacks the `workflows` scope for security reasons.
+         A human with repository write access will need to handle this issue.
+   ```
+
+**Examples of issues you CAN'T complete:**
+- "Update CI to use Go 1.24"
+- "Add new workflow step to run security scans"
+- "Fix failing GitHub Actions workflow"
+- "Change CI to run tests in parallel"
+
+**What you CAN do instead:**
+- Fix the code that causes CI to fail (tests, linting, build errors)
+- Update go.mod, Dockerfiles, or other non-workflow files
+- Document what workflow changes are needed in your PR description
 
 ### If Secrets Are Accidentally Exposed
 
@@ -1577,6 +1629,42 @@ This section documents critical issues encountered and their solutions. Learn fr
 - `agent-failed` - Agent encountered an error
 
 **See:** [Step 2: Claim the Issue](#step-2-claim-the-issue-atomic-claim-verification) for detailed workflow.
+
+### Issue: Go Version Confusion (Go 1.22 vs Go 1.24)
+
+**Problem:** CI hardcoded to Go 1.22, workers misdiagnosed as "Go 1.24 doesn't exist" when encountering version mismatches.
+
+**Root Cause:**
+- CI workflows pinned to `go-version: '1.22'`
+- Projects had mixed Go versions in different components
+- Workers didn't understand that Go 1.24 is REQUIRED for security
+
+**Critical CVEs Fixed in Go 1.24:**
+- **CVE-2025-61729**: crypto/x509 certificate validation bypass
+- **CVE-2025-61727**: crypto/x509 certificate chain verification flaw
+
+**Solution:**
+- **Always use Go 1.24.0 or later** - this is non-negotiable
+- If you encounter `go-version: '1.22'` in CI files → **upgrade to '1.24'**
+- If you encounter `go 1.22` in go.mod → **upgrade to `go 1.24`**
+- Add CVE documentation comments explaining the security requirement
+- Never suggest downgrading to older Go versions
+
+**When working on Go projects:**
+```bash
+# Verify Go version
+go version  # Should show go1.24.0 or later
+
+# Update go.mod files
+go 1.24  # Required for CVE-2025-61729 and CVE-2025-61727
+
+# Update CI workflows
+- uses: actions/setup-go@v5
+  with:
+    go-version: '1.24'  # Security: CVE-2025-61729, CVE-2025-61727
+```
+
+**See documentation:** Projects should have `docs/security/go-version-decision.md` explaining the CVE impact.
 
 ---
 
