@@ -533,7 +533,23 @@ async function autoFixConflicts(pr) {
                 await github('POST',
                     `/repos/${owner}/${repo}/issues/${pr.number}/comments`,
                     {
-                        body: `⚠️ Cannot automatically resolve merge conflicts. Manual resolution required.\n\nPlease rebase this PR on \`${GITHUB_BRANCH}\`.\n\nLabeled as \`needs-human-review\`.`
+                        body: `⚠️ **Cannot automatically resolve merge conflicts**
+
+**Worker:** \`${WORKER_ID}\`
+
+**What I tried:**
+1. Rebased this PR on \`${GITHUB_BRANCH}\`
+2. Rebase resulted in merge conflicts
+3. Attempted automatic resolution using \`git checkout --ours\` strategy (keeping this PR's changes)
+4. Automatic resolution failed - conflicts are too complex
+
+**Why it failed:**
+The conflicts cannot be resolved by simply choosing one side or the other. Manual review is needed to properly merge the changes.
+
+**Next steps:**
+Please manually rebase this PR on \`${GITHUB_BRANCH}\` and resolve conflicts.
+
+Labeled as \`needs-human-review\`.`
                     }
                 );
 
