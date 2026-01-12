@@ -349,17 +349,32 @@ async function checkMyPRs() {
 
     log(`Found ${myPRs.length} of my open PRs`);
 
+    // Refetch each PR individually to get accurate mergeable_state
+    // (List endpoint returns undefined for mergeable/mergeable_state)
+    const detailedPRs = [];
+    for (const pr of myPRs) {
+        const detailResponse = await github('GET',
+            `/repos/${owner}/${repo}/pulls/${pr.number}`
+        );
+        if (detailResponse.status === 200) {
+            detailedPRs.push(detailResponse.data);
+        } else {
+            // Fallback to original PR data if detail fetch fails
+            detailedPRs.push(pr);
+        }
+    }
+
     const problems = {
         failing: [],
         conflicts: [],
         stale: [],
-        count: myPRs.length
+        count: detailedPRs.length
     };
 
     const now = Date.now();
     const STALE_DAYS = 14; // PRs older than 14 days are considered stale
 
-    for (const pr of myPRs) {
+    for (const pr of detailedPRs) {
         // Check CI status
         try {
             const checksResponse = await github('GET',
