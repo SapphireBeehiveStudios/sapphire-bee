@@ -709,6 +709,17 @@ All tests must pass before pushing.
 
 ### Step 6: Push and Create PR
 
+**BEFORE pushing, verify pre-commit hooks pass:**
+
+```bash
+# Run all hooks to catch any issues
+pre-commit run --all-files
+
+# If hooks made changes, commit them
+git add .
+git commit -m "fix: address pre-commit hook changes"
+```
+
 Push your branch and create a pull request:
 
 ```
@@ -1151,6 +1162,79 @@ git commit -m "feat: add new feature"
 git status
 git log --oneline -5
 ```
+
+### Pre-Commit Hooks (CRITICAL)
+
+**Git hooks are AUTOMATICALLY installed** when you clone a repository that has `.pre-commit-config.yaml`. Both pre-commit AND pre-push hooks are installed.
+
+#### How Git Hooks Work
+
+**On `git commit`** (pre-commit hooks - automatic):
+- Hooks will **automatically format your code** (black, gofmt, etc.)
+- Hooks will **check for issues** (ruff, go vet, security scans)
+- Hooks will **fix problems automatically** when possible
+- Hooks will **block the commit** if unfixable issues are found
+
+**On `git push`** (pre-push hooks - automatic):
+- Hooks will run all checks again to ensure everything passes
+- This is your final validation before code reaches GitHub
+- Pushes will be **blocked** if any hooks fail
+
+**Manual validation** (when using MCP push_files):
+- MCP push_files bypasses git hooks
+- **Always run** `pre-commit run --all-files` manually before using MCP tools
+
+#### If Your Commit is Blocked
+
+**DO NOT bypass hooks with `--no-verify`** - Fix the issues instead!
+
+```bash
+# 1. See what failed
+git status
+
+# 2. Run hooks manually to see detailed errors
+pre-commit run --all-files
+
+# 3. Common fixes:
+
+# Python formatting issues - hooks auto-fix these
+git add .  # Stage the auto-fixes
+git commit -m "your message"
+
+# Python linting errors (ruff)
+# Fix the code issues ruff reports, then retry
+
+# Go formatting - hooks auto-fix
+git add .
+git commit -m "your message"
+
+# Security issues (detect-secrets)
+# NEVER commit secrets! Remove them, use environment variables instead
+```
+
+#### Before Pushing
+
+**ALWAYS run this before creating a PR:**
+
+```bash
+# Ensure all hooks pass
+pre-commit run --all-files
+
+# If hooks made changes, commit them
+git add .
+git commit -m "fix: address pre-commit hook changes"
+```
+
+#### Available Pre-Commit Tools
+
+Your environment includes:
+- `pre-commit` - Hook manager (auto-installed on clone)
+- `black` - Python formatter
+- `ruff` - Python linter
+- `gofmt` / `go vet` - Go tools
+- `detect-secrets` - Security scanner
+
+**Remember:** Hooks are your friend! They catch issues BEFORE code review, making your PRs cleaner and faster to merge.
 
 ### Creating PRs
 

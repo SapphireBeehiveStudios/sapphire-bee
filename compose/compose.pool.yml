@@ -48,9 +48,6 @@ services:
       # Issue processing configuration
       - ISSUE_LABEL=${ISSUE_LABEL:-agent-ready}
       - POLL_INTERVAL=${POLL_INTERVAL:-60}
-      # Debug logging
-      - ANTHROPIC_LOG=debug
-      - DEBUG=1
       - HOME=/home/claude
       - USER=claude
 

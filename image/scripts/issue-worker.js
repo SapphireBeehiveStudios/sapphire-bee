@@ -197,6 +197,30 @@ async function ensureRepoCloned() {
         } catch (err) {
             log(`Warning: git pull failed: ${err.message}`);
         }
+
+        // Ensure pre-commit and pre-push hooks are installed
+        const preCommitConfig = path.join(PROJECT_DIR, '.pre-commit-config.yaml');
+        if (fs.existsSync(preCommitConfig)) {
+            try {
+                // Check if hooks are installed by looking for the pre-commit hook file
+                const hookFile = path.join(PROJECT_DIR, '.git', 'hooks', 'pre-commit');
+                if (!fs.existsSync(hookFile)) {
+                    log('Installing git hooks...');
+                    execSync('pre-commit install --hook-type pre-commit', {
+                        cwd: PROJECT_DIR,
+                        stdio: 'pipe'  // Quiet output for existing repos
+                    });
+                    execSync('pre-commit install --hook-type pre-push', {
+                        cwd: PROJECT_DIR,
+                        stdio: 'pipe'
+                    });
+                    log('Git hooks installed');
+                }
+            } catch (err) {
+                log(`Warning: Failed to install git hooks: ${err.message}`);
+            }
+        }
+
         return;
     }
     
@@ -213,7 +237,28 @@ async function ensureRepoCloned() {
     // Configure git
     execSync('git config user.name "Sapphire Bee Agent"', { cwd: PROJECT_DIR });
     execSync('git config user.email "2587725+sapphire-bee[bot]@users.noreply.github.com"', { cwd: PROJECT_DIR });
-    
+
+    // Install pre-commit hooks if .pre-commit-config.yaml exists
+    const preCommitConfig = path.join(PROJECT_DIR, '.pre-commit-config.yaml');
+    if (fs.existsSync(preCommitConfig)) {
+        log('Installing pre-commit and pre-push hooks...');
+        try {
+            // Install for pre-commit (runs on git commit)
+            execSync('pre-commit install --hook-type pre-commit', {
+                cwd: PROJECT_DIR,
+                stdio: 'inherit'
+            });
+            // Install for pre-push (runs on git push)
+            execSync('pre-commit install --hook-type pre-push', {
+                cwd: PROJECT_DIR,
+                stdio: 'inherit'
+            });
+            log('Git hooks installed successfully');
+        } catch (err) {
+            log(`Warning: Failed to install git hooks: ${err.message}`);
+        }
+    }
+
     log('Repository cloned successfully');
 }
 
@@ -570,13 +615,11 @@ When you're done, summarize what you changed.`;
         const claude = spawn('claude', [
             '--dangerously-skip-permissions',
             '--no-session-persistence',  // Fresh context for each issue
-            '--verbose',  // Show detailed output including reasoning
-            '--debug',    // Enable debug mode for full visibility
             prompt
         ], {
             cwd: PROJECT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, TERM: 'xterm-256color', ANTHROPIC_LOG: 'debug' }
+            env: { ...process.env, TERM: 'xterm-256color' }
         });
 
         let output = '';

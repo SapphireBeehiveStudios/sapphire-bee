@@ -45,7 +45,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv for Python package management (faster than pip)
 # hadolint ignore=DL3013
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
-    && uv pip install --system --break-system-packages PyJWT cryptography requests
+    && uv pip install --system --break-system-packages \
+        PyJWT \
+        cryptography \
+        requests \
+        pre-commit \
+        black \
+        ruff \
+        detect-secrets
 
 # Install GitHub CLI (gh) for repo management (issues, PRs, etc.)
 # hadolint ignore=DL3008
