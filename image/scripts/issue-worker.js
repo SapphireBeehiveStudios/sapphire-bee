@@ -451,6 +451,153 @@ async function checkMyPRs() {
 }
 
 /**
+ * Use Claude to intelligently resolve merge conflicts
+ */
+async function resolveConflictsWithClaude(pr) {
+    try {
+        // Get list of conflicted files
+        const conflictedFiles = execSync('git diff --name-only --diff-filter=U', {
+            cwd: PROJECT_DIR,
+            encoding: 'utf-8'
+        }).trim().split('\n').filter(f => f);
+
+        if (conflictedFiles.length === 0) {
+            log(`  No conflicted files found`);
+            return false;
+        }
+
+        log(`  Found ${conflictedFiles.length} conflicted file(s): ${conflictedFiles.join(', ')}`);
+
+        // Get PR context for Claude
+        const prContext = `
+PR #${pr.number}: ${pr.title}
+Description: ${pr.body || 'No description provided'}
+Branch: ${pr.head.ref}
+`;
+
+        // Get commit messages from this PR branch
+        let commitLog = '';
+        try {
+            commitLog = execSync(`git log origin/${GITHUB_BRANCH}..HEAD --oneline`, {
+                cwd: PROJECT_DIR,
+                encoding: 'utf-8'
+            }).trim();
+        } catch (err) {
+            commitLog = 'Could not retrieve commit log';
+        }
+
+        // Resolve each conflicted file with Claude
+        for (const file of conflictedFiles) {
+            const filePath = path.join(PROJECT_DIR, file);
+
+            log(`  Asking Claude to resolve conflicts in ${file}...`);
+
+            // Read the file with conflict markers
+            let conflictedContent;
+            try {
+                conflictedContent = fs.readFileSync(filePath, 'utf-8');
+            } catch (err) {
+                log(`  ⚠️  Could not read ${file}: ${err.message}`);
+                return false;
+            }
+
+            // Get the base version of the file from main branch
+            let baseVersion = '';
+            try {
+                baseVersion = execSync(`git show origin/${GITHUB_BRANCH}:"${file}"`, {
+                    cwd: PROJECT_DIR,
+                    encoding: 'utf-8'
+                });
+            } catch (err) {
+                baseVersion = 'File does not exist in base branch (new file)';
+            }
+
+            // Call Claude to resolve the conflict
+            const prompt = `I'm resolving merge conflicts in a Pull Request. I need your help to intelligently merge the changes.
+
+## PR Context
+${prContext}
+
+## Commits in this PR
+${commitLog}
+
+## File: ${file}
+
+### Base version (from ${GITHUB_BRANCH} branch):
+\`\`\`
+${baseVersion}
+\`\`\`
+
+### Current version with conflict markers:
+\`\`\`
+${conflictedContent}
+\`\`\`
+
+## Your Task
+Analyze the conflicts and provide the fully resolved file content that:
+1. Preserves the intent of the PR changes
+2. Integrates any new changes from ${GITHUB_BRANCH} that don't conflict
+3. Removes all conflict markers (<<<<<<, =======, >>>>>>>)
+4. Results in working, correct code
+
+## Important Notes
+- You have access to the full project at /project if you need to check other files for context
+- The section between <<<<<<< HEAD and ======= is the incoming change from ${GITHUB_BRANCH}
+- The section between ======= and >>>>>>> is the PR's change
+- Consider the PR's purpose when deciding how to merge
+
+Respond with ONLY the resolved file content. No markdown code blocks, no explanations, just the final merged code.`;
+
+            try {
+                // Write prompt to temp file to avoid escaping issues
+                const promptFile = path.join(PROJECT_DIR, '.git', `conflict_prompt_${Date.now()}.txt`);
+                fs.writeFileSync(promptFile, prompt, 'utf-8');
+
+                // Use Claude in print mode for non-interactive batch processing
+                const result = execSync(`cat "${promptFile}" | claude --print`, {
+                    cwd: PROJECT_DIR,
+                    encoding: 'utf-8',
+                    maxBuffer: 10 * 1024 * 1024,
+                    timeout: 120000, // 2 minutes for complex conflicts
+                    shell: '/bin/bash'
+                });
+
+                // Clean up prompt file
+                try {
+                    fs.unlinkSync(promptFile);
+                } catch {}
+
+                // Write the resolved content back
+                fs.writeFileSync(filePath, result, 'utf-8');
+
+                // Stage the file
+                execSync(`git add "${file}"`, { cwd: PROJECT_DIR, stdio: 'pipe' });
+
+                log(`  ✅ Resolved ${file}`);
+            } catch (err) {
+                log(`  ❌ Claude failed to resolve ${file}: ${err.message}`);
+                return false;
+            }
+        }
+
+        // Continue the rebase
+        try {
+            execSync('git rebase --continue', {
+                cwd: PROJECT_DIR,
+                stdio: 'pipe'
+            });
+            return true;
+        } catch (err) {
+            log(`  ⚠️  Rebase continue failed: ${err.message}`);
+            return false;
+        }
+    } catch (err) {
+        log(`  ❌ Error during Claude conflict resolution: ${err.message}`);
+        return false;
+    }
+}
+
+/**
  * PHASE 1: Auto-fix merge conflicts by rebasing
  */
 async function autoFixConflicts(pr) {
@@ -500,28 +647,16 @@ async function autoFixConflicts(pr) {
             });
             log(`  ✅ Rebase successful`);
         } catch (rebaseErr) {
-            // Rebase failed, try simple strategy: keep our changes
-            log(`  ⚠️  Rebase conflicts, attempting auto-resolution...`);
+            // Rebase failed, use Claude to intelligently resolve conflicts
+            log(`  ⚠️  Rebase conflicts detected, asking Claude to resolve...`);
 
-            try {
-                // Accept our version for conflicts
-                execSync('git checkout --ours .', {
-                    cwd: PROJECT_DIR,
-                    stdio: 'pipe'
-                });
-                execSync('git add .', { cwd: PROJECT_DIR, stdio: 'pipe' });
-                execSync('git rebase --continue', {
-                    cwd: PROJECT_DIR,
-                    stdio: 'pipe'
-                });
-                log(`  ✅ Auto-resolved conflicts (kept our changes)`);
-            } catch {
-                // Can't auto-resolve, abort
+            const resolved = await resolveConflictsWithClaude(pr);
+            if (!resolved) {
                 execSync('git rebase --abort', {
                     cwd: PROJECT_DIR,
                     stdio: 'pipe'
                 });
-                log(`  ❌ Cannot auto-resolve conflicts, needs human review`);
+                log(`  ❌ Claude could not resolve conflicts, needs human review`);
 
                 // Add needs-human-review label
                 await github('POST',
@@ -540,11 +675,11 @@ async function autoFixConflicts(pr) {
 **What I tried:**
 1. Rebased this PR on \`${GITHUB_BRANCH}\`
 2. Rebase resulted in merge conflicts
-3. Attempted automatic resolution using \`git checkout --ours\` strategy (keeping this PR's changes)
-4. Automatic resolution failed - conflicts are too complex
+3. Invoked Claude to analyze conflict markers and attempt intelligent resolution
+4. Claude could not resolve the conflicts safely
 
 **Why it failed:**
-The conflicts cannot be resolved by simply choosing one side or the other. Manual review is needed to properly merge the changes.
+The conflicts are too complex or ambiguous for automated resolution. Manual review is needed to ensure the merge is correct.
 
 **Next steps:**
 Please manually rebase this PR on \`${GITHUB_BRANCH}\` and resolve conflicts.
@@ -555,6 +690,8 @@ Labeled as \`needs-human-review\`.`
 
                 return false;
             }
+
+            log(`  ✅ Claude resolved conflicts successfully`);
         }
 
         // Push the rebased branch
