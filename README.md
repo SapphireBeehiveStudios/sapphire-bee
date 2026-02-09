@@ -210,16 +210,28 @@ docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:lates
 # 4a. Alternative: Build locally (only if modifying the Dockerfile)
 # make build
 
-# 5. Start persistent agent (recommended)
-make up-agent PROJECT=/path/to/your/project
+# 5. Start the worker pool (recommended)
+make pool-start REPO=owner/repo WORKERS=3
 
-# 6. Run Claude commands
+# 6. Monitor workers
+make pool-status                   # Check worker status
+make pool-health                   # Health check
+make pool-logs                     # Follow logs
+
+# 7. When done
+make pool-stop
+```
+
+### Quick Start (Persistent Mode)
+
+For interactive development with a local project:
+
+```bash
+make up-agent PROJECT=/path/to/your/project
 make claude                        # Interactive session
 make claude P="your prompt here"   # Single prompt
 make claude-print P="prompt"       # Non-interactive batch mode
-
-# 7. When done
-make down-agent
+make down-agent                    # When done
 ```
 
 ### Quick Start (One-shot Mode)
@@ -391,7 +403,30 @@ You can use either `make` targets or scripts directly:
 |--------------|-------------|
 | `make doctor` | Check environment health |
 | `make build` | Build the agent container image |
+| `make build-no-cache` | Build image without cache |
 | `make up` | Start infrastructure (DNS + proxies) |
+| `make down` | Stop all services |
+| `make down-volumes` | Stop all services and remove volumes |
+| `make restart` | Restart all services |
+| `make status` | Show service status |
+| `make validate` | Validate compose configuration |
+| `make config` | Show current configuration |
+| **Pool Mode (Recommended)** | |
+| `make pool-start REPO=... WORKERS=N` | Start worker pool |
+| `make pool-status` | Show all workers status |
+| `make pool-logs` | Follow all worker logs (Docker output) |
+| `make pool-logs-files` | Follow conversation logs (file-based) |
+| `make pool-logs-worker WORKER=N` | Follow specific worker logs |
+| `make pool-add-workers WORKERS=N` | Add workers without interrupting pool |
+| `make pool-scale WORKERS=N` | Scale pool (interrupts existing workers) |
+| `make pool-health` | Check worker pool health |
+| `make pool-health-watch` | Continuously monitor pool health |
+| `make pool-health-restart` | Auto-restart stuck workers |
+| `make pool-metrics` | Show pool metrics and statistics |
+| `make pool-metrics-json` | Show metrics in JSON format |
+| `make pool-metrics-csv` | Export metrics as CSV |
+| `make pool-cleanup-claims REPO=...` | Clean stale claim comments |
+| `make pool-stop` | Stop all workers |
 | **Persistent Mode** | |
 | `make up-agent PROJECT=...` | Start persistent agent with local project |
 | `make claude` | Interactive Claude session |
@@ -404,31 +439,46 @@ You can use either `make` targets or scripts directly:
 | `make up-isolated REPO=...` | Start isolated agent (clones repo) |
 | `make up-isolated REPO=... BRANCH=...` | Start with specific branch |
 | `make down-isolated` | Stop agent and destroy workspace |
-| **Pool Mode** | |
-| `make pool-start REPO=... WORKERS=...` | Start worker pool |
-| `make pool-status` | Show all workers status |
-| `make pool-logs` | Follow all worker logs |
-| `make pool-logs-worker WORKER=...` | Follow specific worker logs |
-| `make pool-add-workers COUNT=...` | Add workers without interrupting pool |
-| `make pool-cleanup-claims REPO=...` | Clean stale claim comments |
-| `make pool-stop` | Stop all workers |
 | **Queue Mode** | |
 | `make queue-start PROJECT=...` | Start async queue processor |
 | `make queue-add TASK="..." NAME=...` | Add task to queue |
 | `make queue-status PROJECT=...` | Show queue status |
+| `make queue-results PROJECT=...` | Show latest result |
+| `make queue-init PROJECT=...` | Initialize queue directories |
 | `make queue-logs` | Follow queue processor logs |
 | `make queue-stop` | Stop queue processor |
 | **One-shot Mode** | |
 | `make run-direct PROJECT=...` | Run Claude in direct mode |
 | `make run-staging STAGING=...` | Run Claude in staging mode |
 | `make run-offline PROJECT=...` | Run Claude in offline mode |
+| **Authentication** | |
+| `make auth` | Check Claude authentication status |
+| `make auth-setup-token` | Generate Claude Max OAuth token |
+| `make github-pat REPO=...` | Create GitHub PAT for a repository |
+| `make github-app-test` | Test GitHub App credentials |
+| `make github-app-validate` | Validate GitHub App setup |
 | **Observability** | |
 | `make logs` | Follow all service logs |
 | `make logs-dns` | Follow DNS filter logs |
+| `make logs-proxy` | Follow all proxy logs |
 | `make logs-report` | Generate network activity report |
-| **Testing** | |
+| `make logs-report-1h` | Generate report for last hour |
+| **Security** | |
+| `make scan PROJECT=...` | Scan project for dangerous patterns |
 | `make test-security` | Run all security tests |
+| `make test-security-parallel` | Run security tests in parallel |
+| `make install-tests` | Install test dependencies |
+| **Development** | |
+| `make install-hooks` | Install git pre-commit hooks |
+| `make lint-scripts` | Lint shell scripts with shellcheck |
 | `make ci` | Run CI workflow locally with `act` |
+| `make ci-validate` | Run CI validate job only |
+| `make ci-build` | Run CI build-test job only |
+| `make ci-dry-run` | Dry run CI |
+| **Cleanup** | |
+| `make clean` | Remove logs and temporary files |
+| `make clean-all` | Stop services, remove volumes and logs |
+| `make clean-images` | Remove agent images |
 
 Run `make help` to see all available targets.
 
@@ -549,7 +599,7 @@ See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
 | Git setup | Uses host's git config | Fresh clone, auto-configured |
 | Best for | Interactive development | Autonomous agents |
 
-## Pool Mode (Multiple Isolated Agents)
+## Pool Mode (Recommended - Multiple Isolated Agents)
 
 Pool mode runs multiple isolated agents in parallel, each processing GitHub issues from the same repository. Perfect for:
 - Processing a backlog of issues automatically
@@ -587,14 +637,29 @@ make pool-start REPO=myorg/my-project WORKERS=3
 # Check worker status
 make pool-status
 
+# Health check (shows stuck/crashed workers)
+make pool-health
+
 # Watch logs from all workers
 make pool-logs
 
+# Watch conversation logs (file-based)
+make pool-logs-files
+
 # Watch a specific worker's logs
-make pool-logs-worker WORKER=worker-1
+make pool-logs-worker WORKER=1
 
 # Add more workers without interrupting existing ones
-make pool-add-workers COUNT=2
+make pool-add-workers WORKERS=2
+
+# View pool metrics and statistics
+make pool-metrics
+
+# Continuously monitor health
+make pool-health-watch
+
+# Auto-restart stuck workers
+make pool-health-restart
 
 # Clean up stale claim comments (if workers crashed)
 make pool-cleanup-claims REPO=myorg/my-project
@@ -637,16 +702,29 @@ make pool-stop
 - Easy to review what each worker did for debugging and auditing
 - Centralized log directory shared across all workers
 
-### Required Labels
+### Label System
 
-Create these labels in your GitHub repository:
+Workers use GitHub labels to coordinate work and communicate status. Create these labels in your repository before starting the pool:
 
-| Label | Purpose |
-|-------|---------|
-| `agent-ready` | Issues ready for agent processing (trigger label) |
-| `in-progress` | Auto-added when an agent claims an issue |
-| `agent-complete` | Auto-added when work is done and PR created |
-| `agent-failed` | Auto-added if the agent encounters an error |
+| Label | Added By | Removed By | Purpose |
+|-------|----------|------------|---------|
+| `agent-ready` | Human | Worker (on completion) | Marks an issue as ready for agent processing. Workers poll for issues with this label. Configurable via `ISSUE_LABEL` env var. |
+| `in-progress` | Worker (on claim) | Worker (on completion) | Indicates a worker has claimed the issue and is actively working on it. Prevents other workers from picking up the same issue. |
+| `agent-complete` | Worker | Human | Work is done and a PR has been created. The issue is ready for human review. |
+| `agent-failed` | Worker | Human | The worker encountered an error it couldn't resolve. Check the PR or worker logs for details. |
+| `needs-human-review` | Worker | Human | Added to PRs when the worker encounters something it can't handle autonomously (e.g., CI/CD workflow changes, permissions issues). |
+
+**Label lifecycle for a successful issue:**
+```
+agent-ready → in-progress → agent-complete
+                              └─ PR opened for review
+```
+
+**Label lifecycle for a failed issue:**
+```
+agent-ready → in-progress → agent-failed
+                              └─ Check logs for error details
+```
 
 ### Configuration
 
@@ -689,11 +767,12 @@ tail -f pool-logs/worker-abc123_*.log
 
 ### Example Workflow
 
-1. **Triage issues** - Review and label issues that are ready for automation
-2. **Add `agent-ready` label** - This queues the issue for processing
-3. **Agents claim and work** - Workers automatically pick up and process issues
-4. **Review PRs** - Agents open PRs that you review and merge
-5. **Issues update** - Labels change to show progress (`in-progress` → `agent-complete`)
+1. **Triage issues** - Review issues and decide which are suitable for automation
+2. **Add `agent-ready` label** - This queues the issue for worker processing
+3. **Worker claims issue** - Adds `in-progress` label, removes `agent-ready`, posts a claim comment
+4. **Worker implements solution** - Clones repo, creates branch, runs Claude Code
+5. **Worker opens PR** - Pushes changes, opens PR linked to the issue, adds `agent-complete`
+6. **Human reviews** - Review the PR, merge or request changes. Remove `agent-complete`/`agent-failed` when done
 
 ### Pool vs Queue Mode
 

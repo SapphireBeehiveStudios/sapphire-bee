@@ -22,33 +22,81 @@ docker pull ghcr.io/sapphirebeehivestudios/sapphire-bee:latest
 docker tag ghcr.io/sapphirebeehivestudios/sapphire-bee:latest sapphire-bee:latest
 make up                        # Start infrastructure
 
-# Daily workflow (persistent mode - recommended)
-make up-agent PROJECT=~/my-project
-make claude                    # Interactive session
-make claude P="your prompt"    # Single prompt
-make down-agent               # When done
-
-# Worker pool (process GitHub issues)
+# Worker pool (recommended - process GitHub issues)
 make pool-start REPO=owner/repo WORKERS=6
 make pool-status              # Check status
 make pool-health              # Health check
 make pool-logs                # View logs
 make pool-stop                # Stop all workers
+
+# Persistent mode (interactive development)
+make up-agent PROJECT=~/my-project
+make claude                    # Interactive session
+make claude P="your prompt"    # Single prompt
+make down-agent               # When done
 ```
 
 ## Key Commands
 
 | Command | Description |
 |---------|-------------|
+| `make doctor` | Check environment health |
 | `make build` | Build agent image (only if modifying Dockerfile) |
 | `make up` | Start infrastructure (DNS + proxies) |
+| `make down` | Stop all services |
+| `make restart` | Restart all services |
+| `make status` | Show service status |
+| `make auth` | Check Claude authentication status |
+| **Pool Mode (Recommended)** | |
+| `make pool-start REPO=... WORKERS=N` | Start worker pool |
+| `make pool-status` | Show all workers status |
+| `make pool-logs` | Follow worker logs (Docker output) |
+| `make pool-logs-files` | Follow conversation logs (file-based) |
+| `make pool-logs-worker WORKER=N` | Follow specific worker logs |
+| `make pool-add-workers WORKERS=N` | Add workers without interrupting pool |
+| `make pool-scale WORKERS=N` | Scale pool (interrupts existing workers) |
+| `make pool-health` | Check worker pool health |
+| `make pool-health-watch` | Continuously monitor pool health |
+| `make pool-health-restart` | Auto-restart stuck workers |
+| `make pool-metrics` | Show pool metrics and statistics |
+| `make pool-cleanup-claims REPO=...` | Clean stale claim comments |
+| `make pool-stop` | Stop all workers |
+| **Persistent Mode** | |
 | `make up-agent PROJECT=...` | Start persistent agent |
 | `make claude` | Interactive Claude session |
+| `make claude P="..."` | Single prompt execution |
 | `make claude-print P="..."` | Non-interactive mode (for scripts) |
-| `make pool-start REPO=... WORKERS=N` | Start worker pool |
-| `make pool-health` | Check worker pool health |
+| `make claude-shell` | Open bash shell in agent |
+| `make agent-status` | Check if agent is running |
+| `make down-agent` | Stop persistent agent |
+| **Isolated Mode** | |
+| `make up-isolated REPO=...` | Start isolated agent (clones repo) |
+| `make up-isolated REPO=... BRANCH=...` | Start with specific branch |
+| `make down-isolated` | Stop agent and destroy workspace |
+| **Queue Mode** | |
+| `make queue-start PROJECT=...` | Start async queue processor |
+| `make queue-add TASK="..." NAME=...` | Add task to queue |
+| `make queue-status PROJECT=...` | Show queue status |
+| `make queue-logs` | Follow queue processor logs |
+| `make queue-stop` | Stop queue processor |
+| **One-shot Mode** | |
+| `make run-direct PROJECT=...` | Run Claude in direct mode |
+| `make run-staging STAGING=...` | Run Claude in staging mode |
+| `make run-offline PROJECT=...` | Run Claude in offline mode |
+| **Observability** | |
+| `make logs` | Follow all service logs |
+| `make logs-dns` | Follow DNS filter logs |
+| `make logs-proxy` | Follow all proxy logs |
+| `make logs-report` | Generate network activity report |
+| **Testing & Development** | |
 | `make test-security` | Run security tests |
+| `make test-security-parallel` | Run security tests in parallel |
+| `make install-hooks` | Install git pre-commit hooks |
+| `make lint-scripts` | Lint shell scripts with shellcheck |
 | `make ci` | Test CI locally (requires `act`) |
+| **Cleanup** | |
+| `make clean` | Remove logs and temporary files |
+| `make clean-all` | Stop services, remove volumes and logs |
 
 ## Two Operating Contexts
 
@@ -184,8 +232,12 @@ sapphire-bee/
 ├── compose/                 # Docker Compose configs
 │   ├── compose.base.yml     # Infrastructure (DNS + proxies)
 │   ├── compose.persistent.yml # Persistent agent
+│   ├── compose.isolated.yml # Isolated agent (clones repo)
 │   ├── compose.pool.yml     # Worker pool
-│   └── compose.queue.yml    # Queue processor
+│   ├── compose.queue.yml    # Queue processor
+│   ├── compose.direct.yml   # Direct mount agent (one-shot)
+│   ├── compose.staging.yml  # Staging mount agent
+│   └── compose.offline.yml  # Offline mode
 ├── configs/
 │   ├── coredns/             # DNS allowlist
 │   └── nginx/               # Proxy configs
@@ -201,9 +253,23 @@ sapphire-bee/
 │   │   └── sandbox-context.md    # Agent context file
 │   └── scripts/
 │       ├── entrypoint.sh    # Container setup
-│       └── issue-worker.js  # Worker pool script
-├── tests/                   # Security test suite (pytest)
-└── scripts/                 # Operational scripts
+│       ├── issue-worker.js  # Worker pool script
+│       └── queue-watcher.js # Async task queue processor
+├── scripts/                 # Operational scripts
+│   ├── run-claude.sh        # Main entry point
+│   ├── claude-exec.sh       # Claude session executor
+│   ├── doctor.sh            # Environment health check
+│   ├── up.sh / down.sh      # Service lifecycle
+│   ├── build.sh             # Image builder
+│   ├── pool-add-workers.sh  # Add workers to running pool
+│   ├── pool-cleanup-claims.sh # Clean stale claim comments
+│   ├── pool-health.sh       # Worker pool health checks
+│   ├── pool-metrics.sh      # Worker pool metrics
+│   ├── logs-report.sh       # Log analyzer
+│   ├── promote.sh           # Staging → live promotion
+│   ├── diff-review.sh       # Change report generator
+│   └── scan-dangerous.sh    # Security pattern scanner
+└── tests/                   # Security test suite (pytest)
 ```
 
 ## Common Issues
