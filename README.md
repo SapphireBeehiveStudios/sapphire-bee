@@ -12,14 +12,21 @@
 [![CI](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/ci.yml/badge.svg)](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/ci.yml)
 [![Build and Push](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/build-and-push.yml/badge.svg)](https://github.com/SapphireBeehiveStudios/sapphire-bee/actions/workflows/build-and-push.yml)
 
-A secure, sandboxed environment for running Claude Code with development projects. Run Claude in isolated containers with network allowlisting, filesystem isolation, and security hardening.
+Run a pool of autonomous Claude Code agents that process GitHub issues in parallel — each in its own secure, sandboxed Docker container with network allowlisting, filesystem isolation, and security hardening.
 
-**Key Features:**
-- **Worker Pool Mode** - Run multiple autonomous agents processing GitHub issues in parallel
-- **Build Tools** - Pre-installed Go, Python, Node.js, and build essentials
-- **Package Manager Access** - Allowlisted network access to golang.org, pypi.org, npm registry
-- **Network Isolation** - DNS-based allowlisting with nginx stream proxies
-- **Multiple Operating Modes** - Persistent, isolated, pool, queue, and one-shot modes
+```bash
+make pool-start REPO=myorg/my-project WORKERS=6    # Launch 6 agents
+make pool-status                                    # Check progress
+make pool-health                                    # Health check
+make pool-logs                                      # Follow worker logs
+make pool-stop                                      # Stop all workers
+```
+
+**Why Sapphire Bee?**
+- **Autonomous Issue Processing** - Workers poll GitHub, claim issues, implement solutions, and open PRs
+- **Maintenance-First Workflow** - Workers fix failing CI and merge conflicts on their own PRs before claiming new work
+- **Secure by Default** - DNS-based network allowlisting, read-only rootfs, dropped capabilities, resource limits
+- **Pre-installed Build Tools** - Go, Python, Node.js, and package manager access (golang.org, pypi.org, npm)
 
 ## Architecture
 
@@ -174,6 +181,139 @@ For ephemeral sessions that don't persist:
 make up                                           # Start infrastructure
 make run-direct PROJECT=/path/to/your/project     # One-shot session
 ```
+
+## Pool Mode (Recommended)
+
+Pool mode is the primary way to use Sapphire Bee. It runs multiple isolated agents in parallel, each processing GitHub issues from the same repository autonomously.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  POOL MODE - Multiple Isolated Agents                                   │
+│                                                                         │
+│                    GitHub Repository                                    │
+│                          │                                              │
+│        ┌─────────────────┼─────────────────┐                            │
+│        ▼                 ▼                 ▼                            │
+│   ┌─────────┐       ┌─────────┐       ┌─────────┐                       │
+│   │ Worker 1│       │ Worker 2│       │ Worker 3│   ...more             │
+│   │ ─────── │       │ ─────── │       │ ─────── │                       │
+│   │ Issue #5│       │ Issue #8│       │ Issue #9│                       │
+│   │  (own   │       │  (own   │       │  (own   │                       │
+│   │  clone) │       │  clone) │       │  clone) │                       │
+│   └────┬────┘       └────┬────┘       └────┬────┘                       │
+│        │                 │                 │                            │
+│        └─────────────────┼─────────────────┘                            │
+│                          ▼                                              │
+│                    Pull Requests                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### How It Works
+
+Workers follow a **maintenance-first, phase-based workflow**:
+
+**Phase 1 - Maintain:** Before claiming new work, each worker checks its own open PRs:
+- Failing CI → auto-fix (`go mod tidy`, pre-commit, linting)
+- Merge conflicts → auto-rebase
+- All problems must be resolved before moving on
+
+**Phase 2 - Limit:** Enforce work-in-progress limits (default: 3 open PRs per worker) to prevent PR accumulation.
+
+**Phase 3 - Create:** Only when all PRs are healthy and under the limit, claim a new issue:
+1. Poll GitHub for issues labeled `agent-ready`
+2. Claim by adding `in-progress` label and posting a CLAIM comment
+3. Clone repo, create branch, run Claude Code to implement the solution
+4. Push changes and open a PR (or update an existing failing PR)
+5. Remove `in-progress`, add `agent-complete`, poll for next issue
+
+### Label System
+
+Workers use GitHub labels to coordinate. Create these labels in your repository before starting:
+
+| Label | Added By | Removed By | Purpose |
+|-------|----------|------------|---------|
+| `agent-ready` | Human | Worker (on completion) | Marks an issue as ready for processing. Workers poll for this label. Configurable via `ISSUE_LABEL` env var. |
+| `in-progress` | Worker (on claim) | Worker (on completion) | Issue is claimed and being worked on. Prevents duplicate claims. |
+| `agent-complete` | Worker | Human | PR created, ready for human review. |
+| `agent-failed` | Worker | Human | Worker hit an unrecoverable error. Check logs. |
+| `needs-human-review` | Worker | Human | Added to PRs for work the agent can't handle (e.g., CI/CD workflow changes). |
+
+**Label lifecycle:**
+```
+Successful:  agent-ready → in-progress → agent-complete  (PR opened)
+Failed:      agent-ready → in-progress → agent-failed    (check logs)
+```
+
+### Day-to-Day Usage
+
+```bash
+# Start pool
+make pool-start REPO=myorg/my-project WORKERS=3
+
+# Monitor
+make pool-status                   # Worker status overview
+make pool-health                   # Detect stuck/crashed workers
+make pool-metrics                  # Statistics and throughput
+make pool-logs                     # Docker stdout/stderr
+make pool-logs-files               # Conversation logs (file-based)
+make pool-logs-worker WORKER=1     # Specific worker
+
+# Scale
+make pool-add-workers WORKERS=2    # Add without interrupting existing
+make pool-scale WORKERS=5          # Scale to N (interrupts existing)
+
+# Maintain
+make pool-health-watch             # Continuous health monitoring
+make pool-health-restart           # Auto-restart stuck workers
+make pool-cleanup-claims REPO=...  # Clean stale claims after crashes
+
+# Stop
+make pool-stop
+```
+
+### Key Features
+
+**Atomic Claiming** - Workers use GitHub's timestamp-based sorting to prevent race conditions. Stale claims (>5 minutes old) are automatically ignored.
+
+**PR Branch Fixing** - If an issue already has an open PR with failing CI, workers check out that branch and fix it instead of creating a duplicate PR.
+
+**Non-Disruptive Scaling** - `make pool-add-workers` uses `docker run` instead of `docker compose --scale`, so existing workers aren't interrupted.
+
+**File-Based Logging** - Each worker conversation is logged to `pool-logs/worker-<id>_<timestamp>.log` for auditing and debugging.
+
+### Configuration
+
+```bash
+# Required (in .env)
+GITHUB_REPO=myorg/my-project              # Repository to work on
+GITHUB_APP_ID=123456                       # GitHub App credentials
+GITHUB_APP_INSTALLATION_ID=12345678
+GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem
+
+# Pool settings
+ISSUE_LABEL=agent-ready                    # Label to filter issues (default)
+POLL_INTERVAL=60                           # Seconds between issue checks
+MAX_OPEN_PRS=3                             # Work limit per worker
+
+# Auto-fix (all default: true)
+AUTO_FIX_CONFLICTS=true                    # Auto-rebase merge conflicts
+AUTO_FIX_GO_MOD=true                       # Auto-fix go mod issues
+AUTO_FIX_PRECOMMIT=true                    # Auto-fix pre-commit failures
+
+# Debug flags
+CLAUDE_DEBUG=1                             # Claude Code debug output
+GITHUB_DEBUG=1                             # GitHub API debug output
+POOL_DEBUG=1                               # Worker pool debug output
+```
+
+### Example Workflow
+
+1. **Triage issues** - Review issues and decide which are suitable for automation
+2. **Add `agent-ready` label** - This queues the issue for worker processing
+3. **Worker claims issue** - Adds `in-progress` label, removes `agent-ready`, posts a claim comment
+4. **Worker implements solution** - Clones repo, creates branch, runs Claude Code
+5. **Worker opens PR** - Pushes changes, opens PR linked to the issue, adds `agent-complete`
+6. **Human reviews** - Review the PR, merge or request changes
 
 ## Authentication
 
@@ -426,192 +566,9 @@ make ci-build       # Build test
 make ci-dry-run     # Preview without running
 ```
 
-## Pool Mode (Recommended - Multiple Isolated Agents)
+## Other Modes
 
-Pool mode runs multiple isolated agents in parallel, each processing GitHub issues from the same repository. Perfect for:
-- Processing a backlog of issues automatically
-- Running multiple agents 24/7 to handle incoming work
-- Scaling up for large refactoring or feature batches
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  POOL MODE - Multiple Isolated Agents                                   │
-│                                                                         │
-│                    GitHub Repository                                    │
-│                          │                                              │
-│        ┌─────────────────┼─────────────────┐                            │
-│        ▼                 ▼                 ▼                            │
-│   ┌─────────┐       ┌─────────┐       ┌─────────┐                       │
-│   │ Worker 1│       │ Worker 2│       │ Worker 3│   ...more             │
-│   │ ─────── │       │ ─────── │       │ ─────── │                       │
-│   │ Issue #5│       │ Issue #8│       │ Issue #9│                       │
-│   │  (own   │       │  (own   │       │  (own   │                       │
-│   │  clone) │       │  clone) │       │  clone) │                       │
-│   └────┬────┘       └────┬────┘       └────┬────┘                       │
-│        │                 │                 │                            │
-│        └─────────────────┼─────────────────┘                            │
-│                          ▼                                              │
-│                    Pull Requests                                        │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Quick Start
-
-```bash
-# Start a pool of 3 workers
-make pool-start REPO=myorg/my-project WORKERS=3
-
-# Check worker status
-make pool-status
-
-# Health check (shows stuck/crashed workers)
-make pool-health
-
-# Watch logs from all workers
-make pool-logs
-
-# Watch conversation logs (file-based)
-make pool-logs-files
-
-# Watch a specific worker's logs
-make pool-logs-worker WORKER=1
-
-# Add more workers without interrupting existing ones
-make pool-add-workers WORKERS=2
-
-# View pool metrics and statistics
-make pool-metrics
-
-# Continuously monitor health
-make pool-health-watch
-
-# Auto-restart stuck workers
-make pool-health-restart
-
-# Clean up stale claim comments (if workers crashed)
-make pool-cleanup-claims REPO=myorg/my-project
-
-# Stop all workers
-make pool-stop
-```
-
-### How It Works
-
-1. **Workers start** - Each worker clones the repository into its own isolated Docker volume
-2. **Issue polling** - Workers poll GitHub for issues labeled `agent-ready` (configurable)
-3. **Claim & work** - Worker claims an issue by:
-   - Adding an `in-progress` label
-   - Posting a CLAIM comment with worker ID
-   - Creating a branch (or checking out existing PR branch if issue has a failing PR)
-4. **Execute work** - Worker runs Claude Code to implement the solution
-5. **Open/Update PR** - Worker pushes changes and opens a new PR or updates existing one
-6. **Next issue** - Worker removes `in-progress` label, adds `agent-complete`, polls for next issue
-
-### Key Features
-
-**Atomic Claiming:**
-- Workers use GitHub's timestamp-based sorting to prevent race conditions
-- Stale claims (>5 minutes old) are automatically ignored
-- Claim comments prevent duplicate work
-
-**PR Branch Fixing:**
-- If an issue already has an open PR with failing CI, workers check out that branch
-- Workers fix the failing tests/issues instead of creating duplicate PRs
-- Updates existing PR with new commits
-
-**Non-Disruptive Scaling:**
-- Add workers to running pool without interrupting active workers
-- Uses `docker run` instead of `docker compose --scale` to avoid recreation
-- New workers join immediately and start claiming issues
-
-**File-Based Logging:**
-- Each worker conversation logged to `pool-logs/worker-<id>_<timestamp>.log`
-- Easy to review what each worker did for debugging and auditing
-- Centralized log directory shared across all workers
-
-### Label System
-
-Workers use GitHub labels to coordinate work and communicate status. Create these labels in your repository before starting the pool:
-
-| Label | Added By | Removed By | Purpose |
-|-------|----------|------------|---------|
-| `agent-ready` | Human | Worker (on completion) | Marks an issue as ready for agent processing. Workers poll for issues with this label. Configurable via `ISSUE_LABEL` env var. |
-| `in-progress` | Worker (on claim) | Worker (on completion) | Indicates a worker has claimed the issue and is actively working on it. Prevents other workers from picking up the same issue. |
-| `agent-complete` | Worker | Human | Work is done and a PR has been created. The issue is ready for human review. |
-| `agent-failed` | Worker | Human | The worker encountered an error it couldn't resolve. Check the PR or worker logs for details. |
-| `needs-human-review` | Worker | Human | Added to PRs when the worker encounters something it can't handle autonomously (e.g., CI/CD workflow changes, permissions issues). |
-
-**Label lifecycle for a successful issue:**
-```
-agent-ready → in-progress → agent-complete
-                              └─ PR opened for review
-```
-
-**Label lifecycle for a failed issue:**
-```
-agent-ready → in-progress → agent-failed
-                              └─ Check logs for error details
-```
-
-### Configuration
-
-```bash
-# Environment variables (in .env or exported)
-GITHUB_REPO=myorg/my-project           # Repository to work on
-ISSUE_LABEL=agent-ready                # Label to filter issues (default)
-POLL_INTERVAL=60                       # Seconds between issue checks
-WORKERS=3                              # Number of parallel workers
-
-# Optional debugging flags
-CLAUDE_DEBUG=1                         # Enable Claude Code debug output
-GITHUB_DEBUG=1                         # Enable GitHub API debug output
-POOL_DEBUG=1                           # Enable worker pool debug output
-```
-
-### Logging
-
-All worker conversations are logged to the `pool-logs/` directory:
-
-```
-pool-logs/
-├── worker-abc123_20250111_143022.log  # Worker abc123's conversation
-├── worker-def456_20250111_143045.log  # Worker def456's conversation
-└── ...
-```
-
-**Viewing logs:**
-```bash
-# Watch all workers
-make pool-logs
-
-# Watch specific worker
-make pool-logs-worker WORKER=1
-
-# View completed logs
-ls -lh pool-logs/
-tail -f pool-logs/worker-abc123_*.log
-```
-
-### Example Workflow
-
-1. **Triage issues** - Review issues and decide which are suitable for automation
-2. **Add `agent-ready` label** - This queues the issue for worker processing
-3. **Worker claims issue** - Adds `in-progress` label, removes `agent-ready`, posts a claim comment
-4. **Worker implements solution** - Clones repo, creates branch, runs Claude Code
-5. **Worker opens PR** - Pushes changes, opens PR linked to the issue, adds `agent-complete`
-6. **Human reviews** - Review the PR, merge or request changes. Remove `agent-complete`/`agent-failed` when done
-
-### Pool vs Queue Mode
-
-| Feature | Pool Mode | Queue Mode |
-|---------|-----------|------------|
-| Task source | GitHub issues | Local file queue |
-| Workspace | Isolated (per worker) | Shared project directory |
-| Parallelism | Multiple workers | Single processor |
-| Output | Pull requests | Direct file changes |
-| Best for | Autonomous issue processing | Batch tasks on local project |
-
-## Persistent Mode
+### Persistent Mode
 
 Persistent mode keeps the agent container running, allowing you to:
 - **Instant Claude access** - No container startup delay
@@ -648,7 +605,7 @@ make down-agent
 - Claude maintains conversation context across commands
 - Multiple terminal windows can attach to the same session
 
-## Isolated Mode (Autonomous Agent)
+### Isolated Mode (Autonomous Agent)
 
 Isolated mode lets the agent clone a repository into its own isolated workspace. Perfect for:
 - Autonomous agents that work independently
@@ -674,7 +631,7 @@ make agent-status
 make down-isolated
 ```
 
-### How It Works
+#### How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -689,7 +646,7 @@ make down-isolated
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Required Configuration
+#### Required Configuration
 
 Isolated mode requires GitHub App authentication for cloning and pushing:
 
@@ -702,7 +659,7 @@ GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem
 
 See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
 
-### Isolated vs Persistent Mode
+#### Isolated vs Persistent Mode
 
 | Feature | Persistent Mode | Isolated Mode |
 |---------|-----------------|---------------|
@@ -711,7 +668,7 @@ See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
 | Git setup | Uses host's git config | Fresh clone, auto-configured |
 | Best for | Interactive development | Autonomous agents |
 
-## Queue Mode (Async Processing)
+### Queue Mode (Async Processing)
 
 Queue mode lets you add tasks to a directory and have Claude process them automatically in the background. Perfect for:
 - Batch processing multiple tasks overnight
@@ -739,7 +696,7 @@ cat ~/my-project/.claude/results/001-feature.log
 make queue-stop
 ```
 
-### Queue Directory Structure
+#### Queue Directory Structure
 
 ```
 /project/.claude/
@@ -750,7 +707,7 @@ make queue-stop
 └── results/         # Execution logs
 ```
 
-### Task File Format
+#### Task File Format
 
 Simple text or markdown:
 
@@ -770,11 +727,11 @@ Tasks are processed in alphabetical order. Use numeric prefixes for ordering:
 - `002-feature.md`
 - `003-tests.md`
 
-## Running Modes (One-shot)
+### Running Modes (One-shot)
 
 The following modes start a new container for each session. Use these when you don't need persistence or want maximum isolation.
 
-### Direct Mode (Fast)
+#### Direct Mode (Fast)
 
 Agent writes directly to your project directory:
 
@@ -790,7 +747,7 @@ Agent writes directly to your project directory:
 - Use git to track changes and review diffs
 - Run `./scripts/scan-dangerous.sh` to detect suspicious patterns
 
-### Staging Mode (Safer)
+#### Staging Mode (Safer)
 
 Agent writes to a separate staging directory:
 
@@ -808,7 +765,7 @@ mkdir -p ~/staging
 ./scripts/promote.sh ~/staging /path/to/live/project
 ```
 
-### Offline Mode (Maximum Isolation)
+#### Offline Mode (Maximum Isolation)
 
 No network access at all:
 
