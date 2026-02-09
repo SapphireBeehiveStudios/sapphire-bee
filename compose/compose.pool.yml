@@ -68,7 +68,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=100M,mode=1777
-      - /home/claude:size=500M,mode=0755,uid=1000,gid=1000  # Increased for pre-commit cache
+      - /home/claude:size=1G,mode=0755,uid=1000,gid=1000  # Increased to 1GB for Go/Python/pre-commit caches
     cap_drop:
       - ALL
     security_opt:

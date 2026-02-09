@@ -35,12 +35,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
-    # Go for building and testing Go services
-    golang-go \
     # Build essentials for compiling dependencies
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.24 (required for CVE-2025-61729 and CVE-2025-61727 fixes)
+# These CVEs affect crypto/x509 certificate validation - critical security vulnerabilities
+# Download and install from official Go releases
+RUN ARCH=$(dpkg --print-architecture) && \
+    case "$ARCH" in \
+        amd64) GO_ARCH=amd64 ;; \
+        arm64) GO_ARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -fsSL "https://go.dev/dl/go1.24.0.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz && \
+    ln -s /usr/local/go/bin/go /usr/local/bin/go && \
+    ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/home/claude/go"
 
 # Install uv for Python package management (faster than pip)
 # hadolint ignore=DL3013
@@ -86,9 +102,10 @@ COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/setup-github-app.sh /opt/scripts/setup-github-app.sh
 COPY scripts/clone-repo.sh /opt/scripts/clone-repo.sh
 COPY scripts/verify-mcp.sh /opt/scripts/verify-mcp.sh
+COPY scripts/issue-worker.js /opt/scripts/issue-worker.js
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     /opt/scripts/setup-github-app.sh /opt/scripts/clone-repo.sh \
-    /opt/scripts/verify-mcp.sh
+    /opt/scripts/verify-mcp.sh /opt/scripts/issue-worker.js
 
 # Copy config files last (they change most frequently)
 # This minimizes cache invalidation when only config changes
