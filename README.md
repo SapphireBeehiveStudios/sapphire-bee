@@ -82,74 +82,6 @@ A secure, sandboxed environment for running Claude Code with development project
 | DNS Filter | Semi-trusted | Controls network access |
 | Internet | Untrusted | Allowlisted domains only |
 
-## Build Tools & Development Environment
-
-The agent container includes a comprehensive development environment for working with multiple languages and frameworks.
-
-### Installed Tools
-
-| Category | Tools | Version |
-|----------|-------|---------|
-| **Languages** | Node.js, Python 3, Go | Latest from Debian repos |
-| **Package Managers** | npm, pip, uv, go mod | Latest |
-| **Build Tools** | make, gcc, g++, git | Latest |
-| **Utilities** | curl, jq, zip, unzip, file, gh CLI | Latest |
-| **Code Quality** | pre-commit, black, ruff, detect-secrets | Latest via uv |
-
-### Network Access for Package Managers
-
-The sandbox provides allowlisted network access to these package repositories:
-
-| Domain | Purpose | Proxy IP |
-|--------|---------|----------|
-| `api.github.com` | GitHub API (issues, PRs, releases) | 10.100.1.10 |
-| `raw.githubusercontent.com` | Raw file content | 10.100.1.11 |
-| `codeload.github.com` | Repository archives | 10.100.1.12 |
-| `api.anthropic.com` | Claude API | 10.100.1.14 |
-| `proxy.golang.org` | Go module proxy | 10.100.1.20 |
-| `sum.golang.org` | Go checksum database | 10.100.1.21 |
-| `pypi.org` | Python package index | 10.100.1.22 |
-| `files.pythonhosted.org` | Python package files | 10.100.1.23 |
-
-### Usage Examples
-
-**Go Projects:**
-```bash
-# Inside the container
-cd /project/your-go-service
-go mod download
-go build
-go test ./...
-```
-
-**Python Projects:**
-```bash
-# Using venv (recommended due to PEP 668)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest
-
-# Using uv (faster)
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-```
-
-**Node.js Projects:**
-```bash
-npm install
-npm test
-npm run build
-```
-
-**Pre-commit Hooks:**
-```bash
-# Install and run pre-commit hooks
-pre-commit install
-pre-commit run --all-files
-```
-
 ## Prerequisites
 
 ### macOS Apple Silicon Setup
@@ -337,36 +269,31 @@ echo 'GITHUB_PAT=github_pat_...' >> .env
 - Direct pushes to `main`/`master` branches are **blocked**
 - Repos are cloned to a `claude/work-*` branch automatically
 - Force pushes and remote branch deletions are disabled
-- Changes must be merged via pull request (`gh pr create`)
+- Changes must be merged via pull request
 
-**Usage:**
+**Usage (inside the container):**
 ```bash
-# Inside the container, git and gh are automatically configured
-
-# Clone a repository:
-/opt/scripts/clone-repo.sh owner/repo
-
-# Or use git directly:
+# Git CLI works for local operations:
 git clone https://github.com/owner/repo.git
 git add .
 git commit -m "Changes made by Claude"
 git push
 
-# GitHub CLI (gh) is also available for repo management:
-gh issue list
-gh issue create --title "Bug" --body "Description"
-gh pr create --title "Fix bug" --body "Description"
-gh pr list
-gh pr merge 123
+# Clone a repository via helper script:
+/opt/scripts/clone-repo.sh owner/repo
 ```
 
-**MCP Integration (GitHub App only):**
+**GitHub App MCP Tools (recommended for GitHub operations):**
 
-When using GitHub App authentication, Claude Code automatically has access to GitHub MCP tools:
+When using GitHub App authentication, Claude Code has access to MCP tools for GitHub API operations. Workers in pool/isolated mode should use these instead of `gh` CLI:
 - `get_file_contents` - Read files from repos
 - `search_code` - Search across repositories
 - `create_issue` / `create_pull_request` - Manage issues and PRs
 - `list_commits` - View commit history
+
+**GitHub CLI (`gh`):**
+
+The `gh` CLI is also available inside the container for PAT-based authentication. However, when using GitHub App auth, prefer MCP tools instead - `gh` CLI does not work with GitHub App tokens.
 
 ### Using Make vs Scripts
 
@@ -376,9 +303,9 @@ The Makefile is for **you (the human)** to run on your Mac — it manages the sa
 ┌─────────────────────────────────────────────────────────┐
 │                    YOUR MAC (Host)                      │
 │                                                         │
-│   You run:  make build                                  │
-│             make up                                     │
-│             make run-direct PROJECT=~/my-project        │
+│   You run:  make pool-start REPO=org/repo WORKERS=3     │
+│             make pool-status                            │
+│             make pool-stop                              │
 │                        │                                │
 │                        ▼                                │
 │            ┌───────────────────────┐                    │
@@ -498,106 +425,6 @@ make ci-validate    # Lint and validate
 make ci-build       # Build test
 make ci-dry-run     # Preview without running
 ```
-
-## Persistent Mode (Recommended)
-
-Persistent mode keeps the agent container running, allowing you to:
-- **Instant Claude access** - No container startup delay
-- **Context persistence** - Claude remembers previous interactions within a session
-- **Quick prompts** - Run single commands without entering interactive mode
-
-```bash
-# Start your work session
-make up-agent PROJECT=~/my-project
-
-# Throughout the day, run Claude commands instantly
-make claude P="What files are in this project?"
-make claude P="Add a new feature to the main module"
-make claude P="Fix the bug in helper.py"
-
-# For automation/scripts, use print mode (no interactive prompts)
-make claude-print P="List all Python files"
-
-# For longer conversations, use interactive mode
-make claude
-
-# Open a shell for manual exploration
-make claude-shell
-
-# Check agent status
-make agent-status
-
-# End of day - stop the agent
-make down-agent
-```
-
-**Benefits over one-shot mode:**
-- No 3-5 second container startup for each interaction
-- Claude maintains conversation context across commands
-- Multiple terminal windows can attach to the same session
-
-## Isolated Mode (Autonomous Agent)
-
-Isolated mode lets the agent clone a repository into its own isolated workspace. Perfect for:
-- Autonomous agents that work independently
-- Multi-agent workflows where each agent has its own workspace
-- CI/CD integration where you don't want to mount host directories
-- Maximum isolation from host filesystem
-
-```bash
-# Start isolated agent (clones repo on startup)
-make up-isolated REPO=owner/repo
-
-# Optionally specify a branch
-make up-isolated REPO=owner/repo BRANCH=feature-branch
-
-# Run Claude commands (same as persistent mode)
-make claude                        # Interactive session
-make claude P="fix issue #42"      # Single prompt
-
-# Check agent status
-make agent-status
-
-# Stop and destroy workspace
-make down-isolated
-```
-
-### How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  ISOLATED MODE                                              │
-│                                                             │
-│  1. Container starts with GITHUB_REPO env var               │
-│  2. Entrypoint script clones the repo to /project           │
-│  3. Creates a working branch: claude/work-YYYYMMDD-HHMMSS   │
-│  4. Agent works in complete isolation                       │
-│  5. Changes pushed via MCP tools or git push                │
-│  6. Workspace destroyed when container stops                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Required Configuration
-
-Isolated mode requires GitHub App authentication for cloning and pushing:
-
-```bash
-# In .env file
-GITHUB_APP_ID=123456
-GITHUB_APP_INSTALLATION_ID=12345678
-GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem
-```
-
-See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
-
-### Isolated vs Persistent Mode
-
-| Feature | Persistent Mode | Isolated Mode |
-|---------|-----------------|---------------|
-| Workspace | Mounted from host | Cloned fresh on startup |
-| Files after stop | Persist on host | **Destroyed** |
-| Git setup | Uses host's git config | Fresh clone, auto-configured |
-| Best for | Interactive development | Autonomous agents |
 
 ## Pool Mode (Recommended - Multiple Isolated Agents)
 
@@ -758,7 +585,7 @@ pool-logs/
 make pool-logs
 
 # Watch specific worker
-make pool-logs-worker WORKER=worker-1
+make pool-logs-worker WORKER=1
 
 # View completed logs
 ls -lh pool-logs/
@@ -783,6 +610,106 @@ tail -f pool-logs/worker-abc123_*.log
 | Parallelism | Multiple workers | Single processor |
 | Output | Pull requests | Direct file changes |
 | Best for | Autonomous issue processing | Batch tasks on local project |
+
+## Persistent Mode
+
+Persistent mode keeps the agent container running, allowing you to:
+- **Instant Claude access** - No container startup delay
+- **Context persistence** - Claude remembers previous interactions within a session
+- **Quick prompts** - Run single commands without entering interactive mode
+
+```bash
+# Start your work session
+make up-agent PROJECT=~/my-project
+
+# Throughout the day, run Claude commands instantly
+make claude P="What files are in this project?"
+make claude P="Add a new feature to the main module"
+make claude P="Fix the bug in helper.py"
+
+# For automation/scripts, use print mode (no interactive prompts)
+make claude-print P="List all Python files"
+
+# For longer conversations, use interactive mode
+make claude
+
+# Open a shell for manual exploration
+make claude-shell
+
+# Check agent status
+make agent-status
+
+# End of day - stop the agent
+make down-agent
+```
+
+**Benefits over one-shot mode:**
+- No 3-5 second container startup for each interaction
+- Claude maintains conversation context across commands
+- Multiple terminal windows can attach to the same session
+
+## Isolated Mode (Autonomous Agent)
+
+Isolated mode lets the agent clone a repository into its own isolated workspace. Perfect for:
+- Autonomous agents that work independently
+- Multi-agent workflows where each agent has its own workspace
+- CI/CD integration where you don't want to mount host directories
+- Maximum isolation from host filesystem
+
+```bash
+# Start isolated agent (clones repo on startup)
+make up-isolated REPO=owner/repo
+
+# Optionally specify a branch
+make up-isolated REPO=owner/repo BRANCH=feature-branch
+
+# Run Claude commands (same as persistent mode)
+make claude                        # Interactive session
+make claude P="fix issue #42"      # Single prompt
+
+# Check agent status
+make agent-status
+
+# Stop and destroy workspace
+make down-isolated
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ISOLATED MODE                                              │
+│                                                             │
+│  1. Container starts with GITHUB_REPO env var               │
+│  2. Entrypoint script clones the repo to /project           │
+│  3. Creates a working branch: claude/work-YYYYMMDD-HHMMSS   │
+│  4. Agent works in complete isolation                       │
+│  5. Changes pushed via MCP tools or git push                │
+│  6. Workspace destroyed when container stops                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Required Configuration
+
+Isolated mode requires GitHub App authentication for cloning and pushing:
+
+```bash
+# In .env file
+GITHUB_APP_ID=123456
+GITHUB_APP_INSTALLATION_ID=12345678
+GITHUB_APP_PRIVATE_KEY_PATH=./secrets/github-app-private-key.pem
+```
+
+See [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) for full setup.
+
+### Isolated vs Persistent Mode
+
+| Feature | Persistent Mode | Isolated Mode |
+|---------|-----------------|---------------|
+| Workspace | Mounted from host | Cloned fresh on startup |
+| Files after stop | Persist on host | **Destroyed** |
+| Git setup | Uses host's git config | Fresh clone, auto-configured |
+| Best for | Interactive development | Autonomous agents |
 
 ## Queue Mode (Async Processing)
 
@@ -894,6 +821,67 @@ Use this for:
 - Testing without API access
 - Maximum security when needed
 
+## Build Tools & Development Environment
+
+The agent container includes a comprehensive development environment for working with multiple languages and frameworks.
+
+### Installed Tools
+
+| Category | Tools | Version |
+|----------|-------|---------|
+| **Languages** | Node.js, Python 3, Go | Latest from Debian repos |
+| **Package Managers** | npm, pip, uv, go mod | Latest |
+| **Build Tools** | make, gcc, g++, git | Latest |
+| **Utilities** | curl, jq, zip, unzip, file, gh CLI | Latest |
+| **Code Quality** | pre-commit, black, ruff, detect-secrets | Latest via uv |
+
+### Network Access for Package Managers
+
+The sandbox provides allowlisted network access to these package repositories:
+
+| Domain | Purpose | Proxy IP |
+|--------|---------|----------|
+| `api.github.com` | GitHub API (issues, PRs, releases) | 10.100.1.10 |
+| `raw.githubusercontent.com` | Raw file content | 10.100.1.11 |
+| `codeload.github.com` | Repository archives | 10.100.1.12 |
+| `api.anthropic.com` | Claude API | 10.100.1.14 |
+| `proxy.golang.org` | Go module proxy | 10.100.1.20 |
+| `sum.golang.org` | Go checksum database | 10.100.1.21 |
+| `pypi.org` | Python package index | 10.100.1.22 |
+| `files.pythonhosted.org` | Python package files | 10.100.1.23 |
+
+### Usage Examples
+
+**Go Projects:**
+```bash
+# Inside the container
+cd /project/your-go-service
+go mod download
+go build
+go test ./...
+```
+
+**Python Projects:**
+```bash
+# Using uv (recommended, faster)
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+
+# Using venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest
+```
+
+**Node.js Projects:**
+```bash
+npm install
+npm test
+npm run build
+```
+
 ## Security Tests
 
 The sandbox includes comprehensive pytest-based security tests that verify all security features are properly enforced.
@@ -948,15 +936,17 @@ Tests run automatically in CI on every push and pull request.
 
 ```bash
 # Live logs from all services
-docker compose -f compose/compose.base.yml logs -f
+make logs
 
 # DNS filter logs only
-docker compose -f compose/compose.base.yml logs -f dnsfilter
+make logs-dns
+
+# All proxy logs
+make logs-proxy
 
 # Generate summary report
-./scripts/logs-report.sh
-./scripts/logs-report.sh --since 1h
-./scripts/logs-report.sh --output report.txt
+make logs-report
+make logs-report-1h
 ```
 
 ### What's Logged
@@ -1029,7 +1019,7 @@ proxy_github forwards to real github.com:443
 | Host secrets | NOT mounted | NOT mounted | NOT mounted |
 | Docker socket | NOT mounted | NOT mounted | NOT mounted |
 
-## Cloud Transition
+## CI/CD & Container Registry
 
 ### Using Pre-built Images
 
@@ -1176,11 +1166,10 @@ open -a Docker  # macOS
 **DNS resolution failing**
 ```bash
 # Check if dnsfilter is healthy
-docker compose -f compose/compose.base.yml ps
+make status
 
 # Restart services
-./scripts/down.sh
-./scripts/up.sh
+make restart
 ```
 
 **"Permission denied" on scripts**
@@ -1230,15 +1219,18 @@ sapphire-bee/
 │       └── queue-watcher.js  # Async task queue processor
 ├── scripts/
 │   ├── run-claude.sh         # Main entry point
-│   ├── promote.sh            # Staging → live promotion
-│   ├── diff-review.sh        # Change report generator
-│   ├── scan-dangerous.sh     # Security pattern scanner
-│   ├── logs-report.sh        # Log analyzer
+│   ├── claude-exec.sh        # Claude session executor
 │   ├── doctor.sh             # Environment health check
 │   ├── up.sh / down.sh       # Service lifecycle
 │   ├── build.sh              # Image builder
 │   ├── pool-add-workers.sh   # Add workers to running pool
-│   └── pool-cleanup-claims.sh # Clean stale claim comments
+│   ├── pool-cleanup-claims.sh # Clean stale claim comments
+│   ├── pool-health.sh        # Worker pool health checks
+│   ├── pool-metrics.sh       # Worker pool metrics
+│   ├── logs-report.sh        # Log analyzer
+│   ├── promote.sh            # Staging → live promotion
+│   ├── diff-review.sh        # Change report generator
+│   └── scan-dangerous.sh     # Security pattern scanner
 ├── tests/                     # Security test suite
 │   ├── conftest.py           # Docker Compose fixtures
 │   ├── test_dns_filtering.py
